@@ -3,11 +3,16 @@ uuid = "e2b5b24c-ed1b-4dfa-a7f0-df40ce9b2526"
 authors = ["Paulo Jabardo <pjabardo@ipt.br>"]
 version = "0.1.0"
 
-[extras]
-Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+[deps]
+AbstractDAQ = "be525c41-cbe2-4c7e-9446-a8e259030c72"
+Sockets = "6462fe0b-24de-5631-8697-dd941f90decc"
+Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 
 [compat]
 julia = "1.7"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
 test = ["Test"]
