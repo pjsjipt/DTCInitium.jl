@@ -58,7 +58,10 @@ function daqparams(;stbl=1, nfr=64, nms=1, msd=100, trm=0, scm=1, ocf=2)
     if length(nfr) == 2
         nfrez = nfr[2]
         nfr = nfr[1]
+    else
+        nfrez = nfr
     end
+    
 
     if !(1 ≤ nfr ≤ 127)
         throw(BoundsError(nfr, "nfr should range from 1-127"))
@@ -88,45 +91,16 @@ function daqparams(;stbl=1, nfr=64, nms=1, msd=100, trm=0, scm=1, ocf=2)
 
     frd = 0  # Unused
 
-    return (stbl=stbl, nfr=nfr, nfrez=nfrez, frd=frd, nms=nms, msd=msd, trm=trm,
-            scm=scm, ocf=ocf)
+    return Dict(:stbl=>stbl, :nfr=>nfr, :nfrez=>nfrez, :frd=>frd, :nms=>nms,
+                :msd=>msd, :trm=>trm, :scm=>scm, :ocf=>ocf)
     
 end
                    
 function SD2cmd(p; crs="111")
 
-    cmd = "SD2 $crs $(p.stbl) ($(p.nfr)-$(p.nfrez) $(p.frd)) ($(p.nms) $(p.msd)) ($(p.trm) $(p.scm)) $(p.ocf);"
+    cmd = "SD2 $crs $(p[:stbl]) ($(p[:nfr])-$(p[:nfrez]) $(p[:frd])) ($(p[:nms]) $(p[:msd])) ($(p[:trm]) $(p[:scm])) $(p[:ocf]);"
     
 end
-
-struct PortRange
-    start::Int
-    stop::Int
-    r::Bool
-end
-PortRange(p::Integer) = PortRange(p, -1, false)
-PortRange(p::UnitRange) = PortRange(Int(p.start), Int(p.stop), true)
-
-function PortRange(p::AbstractString)
-    p = strip(p)
-    
-    r1 = r"^[0-9][0-9][0-9]$"
-    r2 = r"^[0-9][0-9][0-9]-[0-9][0-9][0-9]$"
-    
-    if occursin(r1, p)
-        return PortRange(parse(Int, p), -1, false)
-    elseif occursin(r2, p)
-        i = findfirst(isequal('-'), p)
-        p1 = parse(Int, p[1:(i-1)])
-        p2 = parse(Int, p[(i+1):end])
-        return PortRange(p1, p2, true)
-    else
-        throw(ArgumentError(p, "Not a valid port or port range"))
-    end
-    
-end
-
-isrange(p::PortRange) = p.r
 
 
                    
@@ -209,11 +183,11 @@ function defscanlist(scanners, ports...)
     
 end
 
-SD3cmd(stbl, plst; crs="111") = "SD3 $crs $stbl, $plt;"
+SD3cmd(stbl, plst; crs="111") = "SD3 $crs $stbl,$plst;"
 
 function SD5cmd(stbl; crs="111")
     if !(0≤stbl≤5)
-        throw(ArgumentError(stbl, "Coefficient form of SD5: 0 ≤ stbl ≤ 5!"))
+        throw(DomainError(stbl, "Coefficient form of SD5: 0 ≤ stbl ≤ 5!"))
     end
                   
     return  "SD5 $crs $stbl;"
@@ -222,26 +196,26 @@ end
 function SD5cmd(stbl, actx; crs="111")
 
     if stbl != -1
-        throw(ArgumentError(stbl, "Control form of SD5: stbl = -1!"))
+        throw(DomainError(stbl, "Control form of SD5: stbl = -1!"))
     end
     return "SD5 $crs -1 $actx;"
 end
 
 function PC4cmd(unx; lrn=1)
     if !(1 ≤ unx ≤ 12)
-        throw(ArgumentError(unx, "Possible units should be 1-12."))
+        throw(DomainError(unx, "Possible units should be 1-12."))
     end
     return "PC4 $lrn $unx;"
 end
 
 function PC4cmd(unx, fct; lrn=1)
     if unx != 0 || unx != 13
-        throw(ArgumentError(unx, "For specifying unit conversion factors, unx should be either 0 or 13!"))
+        throw(DomainError(unx, "For specifying unit conversion factors, unx should be either 0 or 13!"))
     end
 
     fct1 = float(fct)
     if fct1 ≤ 0
-        throw(ArgumentError(fct, "Unit conversion factor should be a positive number!"))
+        throw(DomainError(fct, "Unit conversion factor should be a positive number!"))
     end
 
     return "PC4 $lrn $unx $fct1;"
@@ -250,11 +224,11 @@ end
 function CV1cmd(valpos, puldur)
 
     if valpos != 0 || valpos != 1
-        throw(ArgumentError(valpos, "Valve position should be either 0 (RUNPOS) or 1 (CALPOS)"))
+        throw(DomainError(valpos, "Valve position should be either 0 (RUNPOS) or 1 (CALPOS)"))
     end
 
     if !(0 ≤ puldur ≤ 199)
-        throw(ArgumentError(puldur, "Pulse duration should be 0-199"))
+        throw(DomainError(puldur, "Pulse duration should be 0-199"))
     end
 
     return "CV1 $valpos, $puldur;"
@@ -262,14 +236,14 @@ end
 
 function CP1cmd(puldur)
     if puldur < 0 || puldur > 30
-        throw(ArgumentError(puldur, "PULSE duration should be between 0 and 30"))
+        throw(DomainError(puldur, "PULSE duration should be between 0 and 30"))
     end
     return "CP1 $puldur;"
 end
 
 function CP2cmd(stbtim)
     if stbtim < 1 || stbtim > 199
-        throw(ArgumentError(stbtim, "Calibration stabilization time should be 1-199 seconds!"))
+        throw(DomainError(stbtim, "Calibration stabilization time should be 1-199 seconds!"))
     end
     return "CP2 $stbtim;"
 end

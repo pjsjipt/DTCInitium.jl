@@ -28,6 +28,9 @@ ispackstreamfloat(resp) = resptype(resp) == 19
 ispackstreambin2(resp) = resptype(resp) == 16
 ispackstreambin3(resp) = resptype(resp) == 17
 
+strpacknum(resp) = Int(ntoh(reinterpret(UInt16, resp[5:6])[1]))
+strpacklen(resp) = Int(ntoh(reinterpret(UInt16, resp[7:8])[1]))
+
 ispackarray(resp) = resptype(resp) == 33
 
 ispacktypevalid(resp) = resptype(resp) ∈ (4, 8, 9, 16, 17, 19, 33, 128)
