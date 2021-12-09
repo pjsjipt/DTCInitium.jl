@@ -274,7 +274,14 @@ function CP2cmd(stbtim)
     return "CP2 $stbtim;"
 end
 
-CA2cmd(lrn=0) = "CA2 $lrn;"
+CA2cmd(lrn=1) = "CA2 $lrn;"
+
+
+OP2cmd(stbl, ports; crs="111") = "OP2 $crs $(-stbl) $ports;"
+
+OP3cmd(stbl, ports; crs="111") = "OP3 $crs $stbl $ports;"
+
+OP5cmd(stbl; crs="111") = "OP5 $crs $stbl;"
 
 
 AD0cmd() = "AD0;"
@@ -300,6 +307,8 @@ function AD2cmd(stbl)
 
 end
 
+
+LA1cmd(port; crs="111") = "LA1 $crs $port;"
 
 LA4cmd(;crs="111") = "LA4 $crs;"
 
