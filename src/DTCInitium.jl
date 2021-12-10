@@ -8,6 +8,8 @@ export Initium, SD1, SD2, SD3, SD5
 abstract type AbstractPressureScanner <: AbstractDaqDevice end
 
 
+include("ports.jl")
+
 
 mutable struct Initium <: AbstractPressureScanner
     "IP address of the device"
@@ -23,8 +25,9 @@ mutable struct Initium <: AbstractPressureScanner
     "Active Setup table"
     stbl::Int
     "DAQ Task handler"
-    task::DAQTask{Initium}
-    daqparams::Dict{Symbol,Int32}
+    task::DAQTask
+    params::Dict{Int,Dict{Symbol,Int32}}
+    chans::Dict{Int,Vector{PortRange}}
 end
 
 
@@ -37,12 +40,18 @@ function Initium(ip, (scn,npp,lrn), lst...; crs="111")
     
     nchans = sum(s[2] for s in scnlst)
     
-    tsk = DAQTask{Initium}(false, false, false, 0, 0,
-                           zeros(UInt8, 24 + nchans*4, 100_000), 100_000, Task(()->1))
-    daqparams = Dict{Symbol,Int32}()
-    dev = Initium(ip1, port, sock, crs, scnlst, 1, tsk, daqparams)
+    tsk = DAQTask(24 + nchans*4, 100_000)
+    
+    params = Dict{Int,Dict{Symbol,Int32}}()
+    chans = Dict{Int,Vector{PortRange}}()
+    dev = Initium(ip1, port, sock, crs, scnlst, 1, tsk, params, chans)
     try
         SD1(dev)
+        # Set the default unit to Pascal (3)
+        for lrn in unique([s[3] for s in scnlst])
+            PC4(dev, 3, 0, lrn=lrn)
+        end
+        
     catch e
         if isa(e, DTCInitiumError)
             close(dev.sock)
@@ -59,56 +68,11 @@ end
 getcrs(dev::Initium) = dev.crs
 scanners(dev::Initium) = dev.scanners
 socket(dev::Initium) = dev.sock
-
+daqparams(dev::Initium) = dev.params
+#daqports(dev::Initium) = dev.
 ipaddr(dev::Initium) = dev.ipaddr
 portnum(dev::Initium) = dev.port
 
-
-struct PortRange
-    start::Int
-    stop::Int
-    r::Bool
-end
-PortRange(p::Integer) = PortRange(p, -1, false)
-PortRange(p::UnitRange) = PortRange(Int(p.start), Int(p.stop), true)
-
-function PortRange(p::AbstractString)
-    p = strip(p)
-    
-    r1 = r"^[0-9][0-9][0-9]$"
-    r2 = r"^[0-9][0-9][0-9]-[0-9][0-9][0-9]$"
-    
-    if occursin(r1, p)
-        return PortRange(parse(Int, p), -1, false)
-    elseif occursin(r2, p)
-        i = findfirst(isequal('-'), p)
-        p1 = parse(Int, p[1:(i-1)])
-        p2 = parse(Int, p[(i+1):end])
-        return PortRange(p1, p2, true)
-    else
-        throw(ArgumentError(p, "Not a valid port or port range"))
-    end
-    
-end
-
-isrange(p::PortRange) = p.r
-
-function strport(p::PortRange)
-
-    if isrange(p)
-        return "$(p.start)-$(p.stop)"
-    else
-        return "$(p.start)"
-    end
-end
-
-
-struct DATable
-    stbl::Int
-    daqparams::Dict{Symbol,Int}
-    scanlist::Vector{PortRange}
-    ports::Vector{Int}
-end
 
 include("errorcodes.jl")
 include("packets.jl")

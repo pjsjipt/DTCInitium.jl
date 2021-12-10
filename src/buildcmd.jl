@@ -104,84 +104,6 @@ end
 
 
                    
-function portlist(ports...)
-    plst = ""
-
-    for p in ports
-        p1 = PortRange(p)
-        if isrange(p1)
-            i1 = p1.start
-            i2 = p1.stop
-            plst *= " $i1-$i2"
-        else
-            plst *= " $(p1.start)"
-        end
-    end
-    return plst
-end
-
-
-function defscanlist(scanners, ports...)
-    scn = [s[1] for s in scanners]
-    npp = [s[2] for s in scanners]
-
-    ii = sortperm(scn)
-    scn = scn[ii]
-    npp = npp[ii]
-    
-    plst = Int[]
-    for p1 in ports
-        p = PortRange(p1)
-        if !isrange(p)
-            pn = p.start
-            s = floor(Int, pn/100)  # Scanner number
-            if s ∉ scn  # Not valid scanner
-                throw(DomainError(pn, "Port $pn not part of any scanner"))
-            end
-            idx = pn - 100*s
-            if idx > npp[findfirst(isequal(s), scn)]
-                throw(BoundsError(pn, "Port $pn not valid for scanner $s"))
-            end
-            push!(plst, pn)
-        else
-            pstart = p.start
-            pstop = p.stop
-            s1 = floor(Int, pstart/100)
-            s2 = floor(Int, pstop/100)
-            for s in s1:s2
-                if s ∉ scn
-                    throw(DomainError(s, "Ports $p have scanners not configured!"))
-                end
-            end
-
-            i = findfirst(isequal(s1), scn)
-            if !(1 ≤ (pstart-100*s1) ≤ npp[i])
-                throw(BoundsError(pstart, "Illegal port number!"))
-            end
-
-            i = findfirst(isequal(s2), scn)
-            if !(1 ≤ (pstop-100*s2) ≤ npp[i])
-                throw(BoundsError(pstart, "Illegal port number!"))
-            end
-                
-            if s2 != s1
-                append!(plst, pstart:(s1*100+npp[i]))
-                for s in (s1+1):(s2-1)
-                    i = findfirst(isequal(s), scn)
-                    append!(plst, (s*100) .+ (1:npp[i]))
-                end
-                i = findfirst(isequal(s2), scn)
-                append!(plst, (s2*100+1):pstop)
-            else
-                i = findfirst(isequal(s2), scn)
-                append!(plst, pstart:pstop)
-            end
-        end
-    end
-
-    return plst
-    
-end
 
 SD3cmd(stbl, plst; crs="111") = "SD3 $crs $stbl,$plst;"
 
@@ -201,24 +123,19 @@ function SD5cmd(stbl, actx; crs="111")
     return "SD5 $crs -1 $actx;"
 end
 
-function PC4cmd(unx; lrn=1)
-    if !(1 ≤ unx ≤ 12)
-        throw(DomainError(unx, "Possible units should be 1-12."))
-    end
-    return "PC4 $lrn $unx;"
-end
 
-function PC4cmd(unx, fct; lrn=1)
-    if unx != 0 || unx != 13
-        throw(DomainError(unx, "For specifying unit conversion factors, unx should be either 0 or 13!"))
-    end
+function PC4cmd(unx, fct=0; lrn=1)
 
-    fct1 = float(fct)
-    if fct1 ≤ 0
-        throw(DomainError(fct, "Unit conversion factor should be a positive number!"))
+    if unx==0 || unx==13
+        if fct ≤ 0 
+            throw(DomainError(unx, "For specifying unit conversion factors, unx should be either 0 or 13! and fct should be positive"))
+        end
+    elseif 1 ≤ unx ≤ 12
+        fct = 0
+    else
+        throw(DomainError(unx, "unx should be 0-13!"))
     end
-
-    return "PC4 $lrn $unx $fct1;"
+    return "PC4 $lrn $unx $fct;"
 end
 
 function CV1cmd(valpos, puldur)

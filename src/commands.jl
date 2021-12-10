@@ -38,11 +38,8 @@ function SD1(dev::Initium)
     isopen(io) || throw(ArgumentError("Socket not open!"))
     
     cmd = SD1cmd(scanners(dev), crs=getcrs(dev))
-    println(isopen(io))
     println(io, cmd)
     resp = read(io, 8)
-    println(resp)
-    println(ispackerr(resp))
     
     ispackerr(resp)  && throw(DTCInitiumError(resperr(resp)))
     
@@ -60,29 +57,50 @@ function SD2(dev::Initium; stbl=1, nfr=64, nms=1, msd=100, trm=0, scm=1, ocf=2)
     println(io, cmd)
     resp = read(io, 8)
     ispackerr(resp) && throw(DTCInitiumError(resperr(resp)))
+
+    daqparams(dev)[stbl] = params
+   
     return respconf(resp)
                  
 end
 
-function SD3(dev::Initium, stbl, ports...)
+function SD3(dev::Initium, stbl, ports::Vector{PortRange})
+
+    if !checkportlist(scanners(dev), ports)
+        thrown(ArgumentError("Invalid pressure ports"))
+    end
+
 
     io = socket(dev)
     isopen(io) || throw(ArgumentError("Socket not open!"))
     
-    pnum = defscanlist(scanners(dev), ports...)
-    pcmd = portlist(ports...)
+    pcmd = strportlist(ports...)
 
     cmd = SD3cmd(stbl, pcmd, crs=getcrs(dev))
 
     println(io, cmd)
     resp = read(io, 8)
     ispackerr(resp) && throw(DTCInitiumError(resperr(resp)))
+
+    dev.chans[stbl] = ports
+    
     return respconf(resp)
                  
 end
 
 
-function PC4(dev, unx, fct=1.0; lrn=1)
+function PC4(dev, unx, fct=0; lrn=1)
+
+    cmd = PC4cmd(unx, fct, lrn=lrn)
+
+    io = socket(dev)
+    isopen(io) || throw(ArgumentError("Socket not open!"))
+    
+    println(io, cmd)
+    resp = read(io, 8)
+    ispackerr(resp) && throw(DTCInitiumError(resperr(resp)))
+    
+    return respconf(resp)
     
 end
 
