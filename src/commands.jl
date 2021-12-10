@@ -74,7 +74,7 @@ function SD3(dev::Initium, stbl, ports::Vector{PortRange})
     io = socket(dev)
     isopen(io) || throw(ArgumentError("Socket not open!"))
     
-    pcmd = strportlist(ports...)
+    pcmd = strportlist(ports)
 
     cmd = SD3cmd(stbl, pcmd, crs=getcrs(dev))
 

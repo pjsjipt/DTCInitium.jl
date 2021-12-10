@@ -3,7 +3,8 @@ using AbstractDAQ
 using Sockets
 
 export Initium, SD1, SD2, SD3, SD5
-
+export daqaddinput, daqconfig, daqacquire, daqacquire!, daqconfig
+export daqstart, daqread, daqread!, daqstop
 
 abstract type AbstractPressureScanner <: AbstractDaqDevice end
 
@@ -72,6 +73,7 @@ daqparams(dev::Initium) = dev.params
 #daqports(dev::Initium) = dev.
 ipaddr(dev::Initium) = dev.ipaddr
 portnum(dev::Initium) = dev.port
+setstbl!(dev::Initium, stbl)= dev.stbl = stbl
 
 
 include("errorcodes.jl")
