@@ -25,23 +25,32 @@ mutable struct Initium <: AbstractPressureScanner
     scanners::Vector{Tuple{Int32,Int32,Int32}}
     "Active Setup table"
     stbl::Int
-    "DAQ Task handler"
-    task::DAQTask
+    "DAQ Task handler - stores binary data"
+    task::DAQTask{UInt8}
     params::Dict{Int,Dict{Symbol,Int32}}
     chans::Dict{Int,Vector{PortRange}}
 end
 
+function Initium(i="192.168.128.9"; crs="111")
 
-function Initium(ip, (scn,npp,lrn), lst...; crs="111")
-    scnlst = scannerlist((scn,npp,lrn), lst...)
-    ip1 = IPv4(ip)
-    port = 8400
-
+    ip1 = IPV4(ip)
     sock = opensock(ip1, port)
+    tsk = DAQTask{UInt8}()
+    setminbufsize!(tsk, 65_000)
+    dev = Initium(ip1, 8400, sock, crs, Vector{Tuple{Int32,Int32,Int32}}[], 1, tsk, Dict{Int,Dict{symbol,Int32}}(), Dict{Int,Vector{PortRange}}())
+    return dev
+end
+
+
+function addscanners(dev::Initium, (scn,npp,lrn), lst...)
     
+    scnlst = scannerlist((scn,npp,lrn), lst...)
+
     nchans = sum(s[2] for s in scnlst)
+
     
-    tsk = DAQTask(24 + nchans*4, 100_000)
+    nb = 24 + nchans*4  # Maximum number of bytes per frame
+    resizebuffer!(dev.task, minbufsize(dev.task), nb)
     
     params = Dict{Int,Dict{Symbol,Int32}}()
     chans = Dict{Int,Vector{PortRange}}()
@@ -49,7 +58,7 @@ function Initium(ip, (scn,npp,lrn), lst...; crs="111")
     try
         SD1(dev)
         # Set the default unit to Pascal (3)
-        for lrn in unique([s[3] for s in scnlst])
+        for lrn in unique([s[3] for s in scnlst])  
             PC4(dev, 3, 0, lrn=lrn)
         end
         
@@ -65,6 +74,7 @@ function Initium(ip, (scn,npp,lrn), lst...; crs="111")
 
     return dev
 end
+
 
 getcrs(dev::Initium) = dev.crs
 scanners(dev::Initium) = dev.scanners
