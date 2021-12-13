@@ -1,14 +1,14 @@
 
 #import AbstractDAQ.daqaddinput
 
-function daqaddinput(dev::Initium, ports::AbstractVector{PortRange})
+function addinput(dev::Initium, ports::AbstractVector{PortRange})
     stbl = dev.stbl
     SD3(dev, stbl, ports)
 end
 
 
-daqaddinput(dev::Initium, ports::AbstractString) = daqaddinput(dev, portlist(ports))
-daqaddinput(dev::Initium, ports...) = daqaddinput(dev, portlist(ports...))
+addinput(dev::Initium, ports::AbstractString) = addinput(dev, portlist(ports))
+addinput(dev::Initium, ports...) = addinput(dev, portlist(ports...))
 
         
     

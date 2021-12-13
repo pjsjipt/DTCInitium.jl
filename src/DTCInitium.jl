@@ -2,7 +2,8 @@ module DTCInitium
 using AbstractDAQ
 using Sockets
 
-export Initium, SD1, SD2, SD3, SD5
+export Initium, SD1, SD2, SD3, SD5, socket
+export addscanners
 export daqaddinput, daqconfig, daqacquire, daqacquire!, daqconfig
 export daqstart, daqread, daqread!, daqstop
 
@@ -31,30 +32,39 @@ mutable struct Initium <: AbstractPressureScanner
     chans::Dict{Int,Vector{PortRange}}
 end
 
-function Initium(i="192.168.128.9"; crs="111")
-
-    ip1 = IPV4(ip)
+function Initium(ip="192.168.129.7"; crs="111")
+    
+    ip1 = IPv4(ip)
+    port = 8400
     sock = opensock(ip1, port)
-    tsk = DAQTask{UInt8}()
-    setminbufsize!(tsk, 65_000)
-    dev = Initium(ip1, 8400, sock, crs, Vector{Tuple{Int32,Int32,Int32}}[], 1, tsk, Dict{Int,Dict{symbol,Int32}}(), Dict{Int,Vector{PortRange}}())
-    return dev
+
+    try
+        tsk = DAQTask{UInt8}()
+        setminbufsize!(tsk, 65_000)
+        dev = Initium(ip1, port, sock, crs, Tuple{Int32,Int32,Int32}[], 1, tsk, Dict{Int,Dict{Symbol,Int32}}(), Dict{Int,Vector{PortRange}}())
+        return dev
+    catch e
+        isopen(sock) && close(sock)
+        throw(e)
+    end
+    
 end
 
+import Base.open
+open(dev::Initium) = dev.sock = opensock(ipaddr(dev), portnum(dev))
 
 function addscanners(dev::Initium, (scn,npp,lrn), lst...)
     
     scnlst = scannerlist((scn,npp,lrn), lst...)
-
+    
     nchans = sum(s[2] for s in scnlst)
-
     
+    dev.scanners = scnlst
     nb = 24 + nchans*4  # Maximum number of bytes per frame
+    return nb
     resizebuffer!(dev.task, minbufsize(dev.task), nb)
-    
-    params = Dict{Int,Dict{Symbol,Int32}}()
-    chans = Dict{Int,Vector{PortRange}}()
-    dev = Initium(ip1, port, sock, crs, scnlst, 1, tsk, params, chans)
+
+    !isopen(socket(dev)) && open(dev)
     try
         SD1(dev)
         # Set the default unit to Pascal (3)
