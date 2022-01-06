@@ -107,19 +107,16 @@ end
 
 SD3cmd(stbl, plst; crs="111") = "SD3 $crs $stbl,$plst;"
 
-function SD5cmd(stbl; crs="111")
-    if !(0≤stbl≤5)
-        throw(DomainError(stbl, "Coefficient form of SD5: 0 ≤ stbl ≤ 5!"))
-    end
-                  
-    return  "SD5 $crs $stbl;"
-end
 
 function SD5cmd(stbl, actx; crs="111")
 
     if stbl != -1
-        throw(DomainError(stbl, "Control form of SD5: stbl = -1!"))
+        throw(DomainError(stbl, "Control form of SD5 implemented only: stbl = -1!"))
     end
+    if actx < 0
+        throw(DomainError(actx, "Non-negative integer is acceptable only!"))
+    end
+    
     return "SD5 $crs -1 $actx;"
 end
 

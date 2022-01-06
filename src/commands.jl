@@ -88,6 +88,23 @@ function SD3(dev::Initium, stbl, ports::Vector{PortRange})
                  
 end
 
+function SD5(dev::Initium, actx)
+
+    stbl = -1
+    io = socket(dev)
+
+    isopen(io) || throw(ArgumentError("Socket not open!"))
+
+    cmd = SD5cmd(stbl, actx, crs=getcrs(dev))
+
+    println(io, cmd)
+    resp = read(io, 8)
+    ispackerr(resp) && throw(DTCInitiumError(resperr(resp)))
+
+    return respconf(resp)
+    
+end
+
 
 function PC4(dev, unx, fct=0; lrn=1)
 
