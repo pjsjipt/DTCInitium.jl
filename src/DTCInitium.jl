@@ -2,10 +2,13 @@ module DTCInitium
 using AbstractDAQ
 using Sockets
 
-export Initium, SD1, SD2, SD3, SD5, socket
+export Initium, SD1, SD2, SD3, SD5, PC4, CA2, AD0, AD2, socket
+export readresponse
+export scannerlist, SD1cmd, daqparams, SD2cmd
 export addscanners
 export daqaddinput, daqconfig, daqacquire, daqacquire!, daqconfig
 export daqstart, daqread, daqread!, daqstop
+export daqchannels
 
 abstract type AbstractPressureScanner <: AbstractDaqDevice end
 
@@ -26,6 +29,8 @@ mutable struct Initium <: AbstractPressureScanner
     scanners::Vector{Tuple{Int32,Int32,Int32}}
     "Active Setup table"
     stbl::Int
+    "Intermittency of temp-sets"
+    actx::Int
     "DAQ Task handler - stores binary data"
     task::DAQTask{UInt8}
     params::Dict{Int,Dict{Symbol,Int32}}
@@ -41,7 +46,7 @@ function Initium(ip="192.168.129.7"; crs="111")
     try
         tsk = DAQTask{UInt8}()
         setminbufsize!(tsk, 65_000)
-        dev = Initium(ip1, port, sock, crs, Tuple{Int32,Int32,Int32}[], 1, tsk, Dict{Int,Dict{Symbol,Int32}}(), Dict{Int,Vector{PortRange}}())
+        dev = Initium(ip1, port, sock, crs, Tuple{Int32,Int32,Int32}[], 1, 1, tsk, Dict{Int,Dict{Symbol,Int32}}(), Dict{Int,Vector{PortRange}}())
         return dev
     catch e
         isopen(sock) && close(sock)
@@ -90,7 +95,6 @@ getcrs(dev::Initium) = dev.crs
 scanners(dev::Initium) = dev.scanners
 socket(dev::Initium) = dev.sock
 daqparams(dev::Initium) = dev.params
-#daqports(dev::Initium) = dev.
 ipaddr(dev::Initium) = dev.ipaddr
 portnum(dev::Initium) = dev.port
 setstbl!(dev::Initium, stbl)= dev.stbl = stbl
