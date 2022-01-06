@@ -189,5 +189,3 @@ function defscanlist(scanners, ports::AbstractVector{PortRange})
     
 end
 
-defscanlist(dev::Initium, stbl=1) = defscanlist(scanners(dev), dev.chans[stbl])
-daqchannels(dev::Initium, stbl=1) = defscanlist(dev, stbl)

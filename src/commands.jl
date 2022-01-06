@@ -109,14 +109,14 @@ function SD2(dev::Initium; stbl=1, nfr=64, nms=1, msd=100, trm=0, scm=1, ocf=2)
     io = socket(dev)
     isopen(io) || throw(ArgumentError("Socket not open!"))
 
-    params = daqparams(stbl=stbl, nfr=nfr, nms=nms, msd=msd, trm=trm, scm=scm, ocf=ocf)
+    params = setdaqparams(stbl=stbl, nfr=nfr, nms=nms, msd=msd, trm=trm, scm=scm, ocf=ocf)
     cmd = SD2cmd(params, crs=getcrs(dev))
 
     println(io, cmd)
     resp = read(io, 8)
     ispackerr(resp) && throw(DTCInitiumError(resperr(resp)))
 
-    daqparams(dev)[stbl] = params
+    daqparams(dev,stbl) = params
    
     return respconf(resp)
                  
@@ -240,6 +240,14 @@ function PC4(dev, unx, fct=0; lrn=1)
     
 end
 
+"""
+    `CA2(dev)`
+
+Perform a zero calibration, basically measure the pressure and use it as a reference.
+If the DTC Initium is provided with the appropriate pressure connections, the scanners
+can be zeroed while measuring.
+
+"""
 function CA2(dev; lrn=1)
     cmd = CA2cmd(lrn)
 
@@ -254,6 +262,12 @@ function CA2(dev; lrn=1)
     
 end
 
+
+"""
+    `AD0(dev)`
+
+Stop data acquisition.
+"""
 function AD0(dev)
     cmd = AD0cmd()
 
@@ -283,6 +297,14 @@ function AD0(dev)
     return respconf(resp)
 end
 
+"""
+    `AD2(dev, stbl, nms)`
+
+Acquire data using `stbl`. If `nms` is not provided it will use 
+the default value specified in the [`SD2`](@ref) command. This function acquires
+all responses sequentially and therefore it can use any value of `ocf` (see [`SD2`](@ref))
+
+"""
 function AD2(dev, stbl, nms=-1)
 
     if stbl < 1 || stbl > 5
@@ -320,7 +342,12 @@ function AD2(dev, stbl, nms=-1)
     return resp, Float64(t2-t1)/1e6
 end
 
+"""
+    `readresponse(io)`
 
+Reads a response from the DTC Initium. It is capable of reading any type of response.
+It will just return the bytes acquired, no processing or parsing is done.
+"""
 function genericesponse(io)
 
     b1 = read(io, 8)

@@ -4,7 +4,7 @@ using Sockets
 
 export Initium, SD1, SD2, SD3, SD5, PC4, CA2, AD0, AD2, socket
 export readresponse
-export scannerlist, SD1cmd, daqparams, SD2cmd
+export scannerlist, SD1cmd, daqparams, setparams, SD2cmd
 export addscanners
 export daqaddinput, daqconfig, daqacquire, daqacquire!, daqconfig
 export daqstart, daqread, daqread!, daqstop
@@ -55,23 +55,26 @@ function Initium(ip="192.168.129.7"; crs="111")
     
 end
 
+
+defscanlist(dev::Initium, stbl=1) = defscanlist(scanners(dev), dev.chans[stbl])
+"""
+
+"""
+daqchannels(dev::Initium, stbl=1) = defscanlist(dev, stbl)
+
 import Base.open
 open(dev::Initium) = dev.sock = opensock(ipaddr(dev), portnum(dev))
 
-function addscanners(dev::Initium, (scn,npp,lrn), lst...)
+function addscanners(dev::Initium, lst...)
     
-    scnlst = scannerlist((scn,npp,lrn), lst...)
-    
+    scnlst = scannerlist(lst...)
     nchans = sum(s[2] for s in scnlst)
     
-    dev.scanners = scnlst
-    nb = 24 + nchans*4  # Maximum number of bytes per frame
-    return nb
-    resizebuffer!(dev.task, minbufsize(dev.task), nb)
 
     !isopen(socket(dev)) && open(dev)
     try
-        SD1(dev)
+        SD1(dev, scnlst)
+        dev.scanners = scnlst
         # Set the default unit to Pascal (3)
         for lrn in unique([s[3] for s in scnlst])  
             PC4(dev, 3, 0, lrn=lrn)
@@ -86,6 +89,8 @@ function addscanners(dev::Initium, (scn,npp,lrn), lst...)
         end
     end
     
+    nb = 24 + nchans*4  # Maximum number of bytes per frame
+    resizebuffer!(dev.task, minbufsize(dev.task), nb)
 
     return dev
 end
@@ -94,7 +99,7 @@ end
 getcrs(dev::Initium) = dev.crs
 scanners(dev::Initium) = dev.scanners
 socket(dev::Initium) = dev.sock
-daqparams(dev::Initium) = dev.params
+daqparams(dev::Initium, stbl=1) = dev.params[stbl]
 ipaddr(dev::Initium) = dev.ipaddr
 portnum(dev::Initium) = dev.port
 setstbl!(dev::Initium, stbl)= dev.stbl = stbl

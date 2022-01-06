@@ -1,7 +1,7 @@
 
 
 """
-`scannerlist((scn, npp, lrn), lst...)`
+`scannerlist(lst...)`
 
 Define scanner list. Scanner list is used by the `SD1` command (see [`SD1cmd`](@ref) and [`SD1`](@ref)) to define which scanners are available to the user. 
 
@@ -24,21 +24,11 @@ julia> scannerlist((1:2, 64, 1), (3:4, 32, 1), (5,16,2))
 ```
 
 """
-function scannerlist((scn, npp, lrn), lst...)
+function scannerlist(lst...)
 
-    nscanners = length(scn)
+    nscanners = 0
     scnlst = Tuple{Int,Int,Int}[]
         
-    for scanner in scn
-        if scanner < 1 || scanner > 8
-            throw(BoundsError(scanner, "Only scanners 1-8 are possible"))
-        end
-        if npp ∉ (16,32,64)
-            throw(BoundsError(npp, "Only ESP with 16, 32 or 64 possible"))
-        end
-        push!(scnlst, (scanner, npp, lrn))
-    end
-
     for s in lst
         scn = s[1]
         npp = s[2]
@@ -100,7 +90,7 @@ function SD1cmd(scnlst; crs="111")
 end
 
 """
-`daqparams(;stbl=1, nfr=64, nms=1, msd=100, trm=0, scm=1, ocf=2)`
+`setdaqparams(;stbl=1, nfr=64, nms=1, msd=100, trm=0, scm=1, ocf=2)`
 
 Creates a dictionary with data acquisition setup parameters to be used by the [`SD2`](@ref) command that configures data acquisition. This function creates arguments that can be used the the `SD2cmd` function.
 
@@ -123,7 +113,7 @@ Parameters
 # Example
 
 ```julia-repl
-julia> daqparams()
+julia> setdaqparams()
 Dict{Symbol, Int64} with 9 entries:
   :frd   => 0
   :scm   => 1
@@ -138,7 +128,7 @@ Dict{Symbol, Int64} with 9 entries:
 ```
 
 """
-function daqparams(;stbl=1, nfr=64, nms=1, msd=100, trm=0, scm=1, ocf=2)
+function setdaqparams(;stbl=1, nfr=64, nms=1, msd=100, trm=0, scm=1, ocf=2)
     if !(1 ≤ stbl ≤ 5)
         throw(BoundsError(stbl, "Scan table limited to 1-5!"))
     end
@@ -187,12 +177,12 @@ end
 """
 `SD2cmd(p; crs="111")`
 
-This function will actually create the command `String` that should be sent to the DTC Initium. The parameter `p` is usually created by function [`daqparams`](@ref). The user will usually use function [`SD2`](@ref) that actually communicates with the DTC Initium.
+This function will actually create the command `String` that should be sent to the DTC Initium. The parameter `p` is usually created by function [`setdaqparams`](@ref). The user will usually use function [`SD2`](@ref) that actually communicates with the DTC Initium.
 
 # Example
 
 ```julia-repl
-julia> p = daqparams()
+julia> p = setdaqparams()
 Dict{Symbol, Int64} with 9 entries:
   :frd   => 0
   :scm   => 1
