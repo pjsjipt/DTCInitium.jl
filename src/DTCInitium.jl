@@ -1,20 +1,28 @@
 module DTCInitium
-using AbstractDAQ
+
 using Sockets
+using AbstractDAQ
+
 
 export Initium, SD1, SD2, SD3, SD5, PC4, CA2, AD0, AD2, socket
-export readresponse
+export readresponse, readresponse!
 export scannerlist, SD1cmd, daqparams, setparams, SD2cmd
 export addscanners
 export daqaddinput, daqconfig, daqacquire, daqacquire!, daqconfig
 export daqstart, daqread, daqread!, daqstop
 export daqchannels
+export DAQTask
 
 abstract type AbstractPressureScanner <: AbstractDaqDevice end
 
 
 include("ports.jl")
 
+struct DTCChannels
+    nchans::Int
+    plst::Vector{PortRange}
+    channels::Vector{Int}
+end
 
 mutable struct Initium <: AbstractPressureScanner
     "IP address of the device"
@@ -34,8 +42,9 @@ mutable struct Initium <: AbstractPressureScanner
     "DAQ Task handler - stores binary data"
     task::DAQTask{UInt8}
     params::Dict{Int,Dict{Symbol,Int32}}
-    chans::Dict{Int,Vector{PortRange}}
+    chans::Dict{Int,DTCChannels}
 end
+
 
 function Initium(ip="192.168.129.7"; crs="111")
     
@@ -57,10 +66,6 @@ end
 
 
 defscanlist(dev::Initium, stbl=1) = defscanlist(scanners(dev), dev.chans[stbl])
-"""
-
-"""
-daqchannels(dev::Initium, stbl=1) = defscanlist(dev, stbl)
 
 import Base.open
 open(dev::Initium) = dev.sock = opensock(ipaddr(dev), portnum(dev))
@@ -92,7 +97,7 @@ function addscanners(dev::Initium, lst...)
     nb = 24 + nchans*4  # Maximum number of bytes per frame
     resizebuffer!(dev.task, minbufsize(dev.task), nb)
 
-    return dev
+    return 
 end
 
 

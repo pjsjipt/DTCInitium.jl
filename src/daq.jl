@@ -1,33 +1,20 @@
 
-#import AbstractDAQ.daqaddinput
-
-function addinput(dev::Initium, ports::AbstractVector{PortRange})
-    stbl = dev.stbl
-    SD3(dev, stbl, ports)
+function AbstractDAQ.daqaddinput(dev::Initium, ports...; stbl=1)
+    plst = portlist(ports...)
+    SD3(dev, stbl, plst)
 end
 
-
-addinput(dev::Initium, ports::AbstractString) = addinput(dev, portlist(ports))
-addinput(dev::Initium, ports...) = addinput(dev, portlist(ports...))
-
-        
+function AbstractDAQ.daqconfig(dev::Initium; freq=1, nsamples=0, avg=1, trigger=0, stbl=1)
     
-
-#import AbstractDAQ.daqconfig
-function daqconfig(dev::Initium; freq, nsamples=0, avg=1, trigger=0)
-
     ms = Int(1000/freq)
-    stbl = dev.stbl
-
     nfr = avg
     nms = nsamples
     msd = ms
     SD2(dev, stbl=stbl, nfr=nfr, nms=nsamples, msd=ms, trm=trigger, scm=1, ocf=2)
-    
 
 end
 
-function readpacket!(io, buf)
+function readresponse!(io, buf)
 
     readbytes!(io, buf, 8)
     msglen = resplen(buf)
@@ -44,34 +31,94 @@ function read_scanner(dev; stbl=1)
     io = socket(dev)
     isopen(io) || throw(ArgumentError("Socket not open!"))
     
-    par = daqparams(dev)[stbl]
-    
-    nsamples = par[:nms]
-    tsk = dev.task
-    
-    resizebuffer!(tsk, nsamples)
+    par = daqparams(dev, stbl)
 
-    tsk.idx = 0
-    tsk.nread = 0
+    # Only EU units without temp-sets
+    if par[:ocf] != 2
+        error("Paramater ocf should be 2!")
+    end
+     
+    tsk = dev.task
+
+    nsamples = par[:nms]
+    
+    if nsamples > 0
+        resizebuffer!(tsk, nsamples, dec=false)
+    end
+    
+    initbuffer!(tsk)
+
+    tsk.isreading = true
     
     cmd = AD2cmd(stbl)
     println(io, cmd)
-    idx = incidx!(tsk)
     t0 = time_ns()
-    ptype = readpacket!(io, buffer(tsk,idx))
+    b = nextbuffer!(tsk)
+    ptype = readresponse!(io, b)
     t1 = time_ns()
+    settiming!(tsk, t0, t1, 1)
+    # Check to see if everything went well
+    rtype = resptype(b)
+    if rtype==4 || rtype == 128 || tsk.stop
+        tsk.isreading = false
+        tsk.nread = 0
+        tsk.idx = 0
+        initbuffer!(tsk)
+        return
+    end
+    
+    tsk.nread += 1
     tn = t1
     #if ptype == 4 || ptype == 128  # Confirmation or error
-    for i in 2:nsamples
-        idx = incidx!(tsk)
-        ptype = readpacket!(io, buffer(tsk, idx))
-        tn = time_ns()
+    stopped = false
+    if nsamples == 0
+        nn = 65000
+    else
+        nn = nsamples
     end
-    idx = incidx!(tsk)
-    readpacket!(io, buffer(tsk, idx))
+    
+    for i in 2:nn
+        b = nextbuffer!(tsk) 
+        ptype = readresponse!(io, b)
+        tn = time_ns()
+        rtype = resptype(b)
+        if rtype==4 || rtype == 128 || tsk.stop
+            # We don't need to store this packet!
+            rewindbuffer!(tsk)
+            stopped = true
+            break
+        end
+        settiming!(tsk, t1, tn, i-1)
+    end
 
-    return t0, t1, tn
+    tsk.isreading = false
+    
+    if !stopped
+        # Got here without the break. Normal operation. 
+        # Read the end buffer
+        b = readresponse(io)
+    end
+
+    return
 end
 
+function read_pressure(dev)
+    tsk  = dev.task
+    #if tsk.pnext 
+
+end
+
+
+function AbstractDAQ.daqacquire(dev::Initium)
+
+    clearbuffer!(dev.task)
     
-        
+end
+
+AbstractDAQ.numchannels(dev::Initium, stbl=1) = dev.chans[stbl].nchans
+
+    
+"""
+
+"""
+daqchannels(dev::Initium, stbl=1) = dev.chans[stbl].channels

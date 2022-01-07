@@ -116,7 +116,7 @@ function SD2(dev::Initium; stbl=1, nfr=64, nms=1, msd=100, trm=0, scm=1, ocf=2)
     resp = read(io, 8)
     ispackerr(resp) && throw(DTCInitiumError(resperr(resp)))
 
-    daqparams(dev,stbl) = params
+    dev.params[stbl] = params
    
     return respconf(resp)
                  
@@ -165,7 +165,9 @@ function SD3(dev::Initium, stbl, ports::AbstractVector{PortRange})
     resp = read(io, 8)
     ispackerr(resp) && throw(DTCInitiumError(resperr(resp)))
 
-    dev.chans[stbl] = ports
+    chans = defscanlist(scanners(dev), ports)
+    
+    dev.chans[stbl] = DTCChannels(length(chans), ports, chans)
     
     return respconf(resp)
                  
@@ -204,7 +206,7 @@ end
 
 
 """
-`PC4cmd(unx, fct=0; lrn=1)`
+`PC4(unx, fct=0; lrn=1)`
 
 Change pressure units. There are predefined units for `unx` in 1-12. If `unx` is 0 or 13, a unit conversion factor from psi is employed specified by parameter `fct`. 
 
