@@ -26,7 +26,7 @@ function readresponse!(io, buf)
     return resptype(buf)
 end
 
-function read_scanner(dev; stbl=1)
+function readscanner!(dev, stbl=1)
 
     io = socket(dev)
     isopen(io) || throw(ArgumentError("Socket not open!"))
@@ -39,21 +39,25 @@ function read_scanner(dev; stbl=1)
     end
      
     tsk = dev.task
+    buf = dev.buffer
 
     nsamples = par[:nms]
     
-    if nsamples > 0
-        resizebuffer!(tsk, nsamples, dec=false)
+    if nsamples > length(buf)
+        resize!(buf, nsamples)
     end
     
-    initbuffer!(tsk)
-
-    tsk.isreading = true
+    cleartask!(tsk)
+    empty!(buf)
     
+    tsk.isreading = true
+
     cmd = AD2cmd(stbl)
     println(io, cmd)
+
     t0 = time_ns()
-    b = nextbuffer!(tsk)
+
+    b = nextbuffer(buf)
     ptype = readresponse!(io, b)
     t1 = time_ns()
     settiming!(tsk, t0, t1, 1)
@@ -78,13 +82,13 @@ function read_scanner(dev; stbl=1)
     end
     
     for i in 2:nn
-        b = nextbuffer!(tsk) 
+        b = nextbuffer(buf) 
         ptype = readresponse!(io, b)
         tn = time_ns()
         rtype = resptype(b)
         if rtype==4 || rtype == 128 || tsk.stop
             # We don't need to store this packet!
-            rewindbuffer!(tsk)
+            pop!(b)
             stopped = true
             break
         end
@@ -98,24 +102,71 @@ function read_scanner(dev; stbl=1)
         # Read the end buffer
         b = readresponse(io)
     end
-
     return
 end
 
-function read_pressure(dev)
+function readpressure(dev, stbl=1)
     tsk  = dev.task
-    #if tsk.pnext 
+    buf = dev.buf
 
-end
+    nt = length(buf)
+    nch = numchannels(dev, stbl)
 
+    P = Matrix{Float32}(undef, nch, nt)
 
-function AbstractDAQ.daqacquire(dev::Initium)
+    for i in 1:nt
+        P[:,i] .= ntoh.(buf[i][25:end])
+    end
 
-    clearbuffer!(dev.task)
+    return P
     
 end
 
-AbstractDAQ.numchannels(dev::Initium, stbl=1) = dev.chans[stbl].nchans
+
+function AbstractDAQ.daqacquire(dev::Initium; stbl=1)
+
+    readscanner!(dev, stbl)
+    fs = samplingfreq(dev.task)
+    P = readpressure(dev, stbl)
+
+    return P, fs
+end
+
+function Abstract.daqstart(dev::Initium, usethread=false; stbl=1)
+    if isreading(dev)
+        error("DTC Initium already reading!")
+    end
+
+    if usethread
+        tsk = Threads.@spawn readscanner!(dev, stbl)
+    else
+        tsk = @async readscanner!(dev, stbl)
+    end
+
+    dev.task.task = tsk
+end
+
+function Abstract.daqread(dev::Initium; stbl=1)
+    sleep(0.1)
+    while isreading(dev)
+        sleep(0.1)
+    end
+    fs = samplingfreq(dev.task)
+    P = readpressure(dev, stbl)
+
+    return P, fs
+end
+
+function daqstop(dev::Initium)
+    tsk = dev.task
+
+    tsk.stop = true
+    AD0(dev)
+    
+end
+
+
+AbstractDAQ.numchannels(dev::Initium; stbl=1) = dev.chans[stbl].nchans
 
     
 """

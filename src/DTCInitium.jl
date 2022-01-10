@@ -34,13 +34,14 @@ mutable struct Initium <: AbstractPressureScanner
     "Cluster/Rack/slot"
     crs::String
     "Attached scanners"
-    scanners::Vector{Tuple{Int32,Int32,Int32}}
+    scanners::Vector{Tuple{Int,Int,Int}}
     "Active Setup table"
     stbl::Int
     "Intermittency of temp-sets"
     actx::Int
     "DAQ Task handler - stores binary data"
-    task::DAQTask{UInt8}
+    task::DAQTask
+    buffer::CircMatBuffer{UInt8}
     params::Dict{Int,Dict{Symbol,Int32}}
     chans::Dict{Int,DTCChannels}
 end
@@ -55,7 +56,9 @@ function Initium(ip="192.168.129.7"; crs="111")
     try
         tsk = DAQTask{UInt8}()
         setminbufsize!(tsk, 65_000)
-        dev = Initium(ip1, port, sock, crs, Tuple{Int32,Int32,Int32}[], 1, 1, tsk, Dict{Int,Dict{Symbol,Int32}}(), Dict{Int,Vector{PortRange}}())
+        dev = Initium(ip1, port, sock, crs, Tuple{Int,Int,Int}[], 1, 1, tsk,
+                      CircMatBuffer{UInt8}(), 
+                      Dict{Int,Dict{Symbol,Int32}}(), Dict{Int,Vector{PortRange}}())
         return dev
     catch e
         isopen(sock) && close(sock)
@@ -64,17 +67,59 @@ function Initium(ip="192.168.129.7"; crs="111")
     
 end
 
+function Initium(scanners...; ip="192.168.129.7", crs="111", npp=64, lrn=1,
+                 bufsize=65_000, addallports=true)
+    dev = Initium(ip, crs=crs)
 
-defscanlist(dev::Initium, stbl=1) = defscanlist(scanners(dev), dev.chans[stbl])
+    addscanners(dev, scsanners...; npp=npp, lrn=lrn)
+
+    # Allocate buffer
+    nchans = availablechans(dev)
+    w = 24 + nchans*4  # Maximum number of bytes per frame
+    resize!(dev.buffer, w, bufsize)
+
+    if addallports
+        # Add all possible pressure ports 
+        for i in 1:5
+            addallpressports(dev, stbl)
+        end
+        
+    end    
+    
+end
+
+function addallpressports(dev, stbl=1)
+
+    if stbl < 1 || stbl > 5
+        throw(ArgumentError("stbl should be between 1 and 5. Got $stbl!"))
+    end
+    
+    plst = PortRange[]
+
+    for (s,n,l) in dev.scanners
+        p1 = s*100 + 1
+        p2 = s*100 + n
+        push!(plst, PortRange(p1,p2,true))
+    end
+    SD3(dev, stbl, plst)
+
+    chans = defscanlist(dev.scanners, plst)
+    dev.chans[stbl] = DTCChannels(length(chans), plst, chans)
+end
+
+    
+"Total number of available channels in the scanners"
+availablechans(dev::Initium) = availablechans(dev.scanners)
+
+#defscanlist(dev::Initium, stbl=1) = defscanlist(scanners(dev), dev.chans[stbl])
+
 
 import Base.open
 open(dev::Initium) = dev.sock = opensock(ipaddr(dev), portnum(dev))
 
-function addscanners(dev::Initium, lst...)
+function addscanners(dev::Initium, lst...; npp=64, lrn=1)
     
     scnlst = scannerlist(lst...)
-    nchans = sum(s[2] for s in scnlst)
-    
 
     !isopen(socket(dev)) && open(dev)
     try
@@ -94,9 +139,6 @@ function addscanners(dev::Initium, lst...)
         end
     end
     
-    nb = 24 + nchans*4  # Maximum number of bytes per frame
-    resizebuffer!(dev.task, minbufsize(dev.task), nb)
-
     return 
 end
 

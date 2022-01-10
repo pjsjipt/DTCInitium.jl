@@ -24,15 +24,29 @@ julia> scannerlist((1:2, 64, 1), (3:4, 32, 1), (5,16,2))
 ```
 
 """
-function scannerlist(lst...)
+function scannerlist(lst...; npp=64, lrn=1)
 
     nscanners = 0
     scnlst = Tuple{Int,Int,Int}[]
         
     for s in lst
-        scn = s[1]
-        npp = s[2]
-        lrn = s[3]
+        if isa(s, Tuple)
+            scn = s[1]
+            if length(s) >= 3
+                npp1 = Int(s[2])
+                lrn1 = Int(s[3])
+            elseif length(s) == 2
+                npp1 = Int(s[2])
+                lrn1 = lrn
+            elseif length(s) == 1
+                npp1 = npp
+                lrn1 = lrn
+            end
+        else
+            scn = s
+            npp1 = npp
+            lrn1 = lrn
+        end
         nscanners += length(scn)
         if nscanners > 8
             throw(BoundsError(nscanners, "Maximum of 8 scanners is possible"))
@@ -41,15 +55,20 @@ function scannerlist(lst...)
             if scanner < 1 || scanner > 8
                 throw(BoundsError(scanner, "Only scanners 1-8 are possible"))
             end
-            if npp ∉ (16,32,64)
+            if npp1 ∉ (16,32,64)
                 throw(BoundsError(npp, "Only ESP with 16, 32 or 64 possible"))
             end
-            push!(scnlst, (scanner, npp, lrn))
+            push!(scnlst, (scanner, npp1, lrn1))
         end
     end
 
     return scnlst
 end
+
+
+availablechans(scnlst) = sum(s[2] for s in scnlst)
+availablechans(scnlst...) = sum(s[2] for s in scnlst...)
+
 
 """
 `SD1cmd(scnlst; crs="111")`
