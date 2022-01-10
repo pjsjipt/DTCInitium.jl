@@ -47,18 +47,17 @@ mutable struct Initium <: AbstractPressureScanner
 end
 
 
-function Initium(ip="192.168.129.7"; crs="111")
+function Initium(ip::String; crs="111")
     
     ip1 = IPv4(ip)
     port = 8400
     sock = opensock(ip1, port)
 
     try
-        tsk = DAQTask{UInt8}()
-        setminbufsize!(tsk, 65_000)
+        tsk = DAQTask()
         dev = Initium(ip1, port, sock, crs, Tuple{Int,Int,Int}[], 1, 1, tsk,
                       CircMatBuffer{UInt8}(), 
-                      Dict{Int,Dict{Symbol,Int32}}(), Dict{Int,Vector{PortRange}}())
+                      Dict{Int,Dict{Symbol,Int32}}(), Dict{Int,Vector{DTCChannels}}())
         return dev
     catch e
         isopen(sock) && close(sock)
@@ -69,22 +68,26 @@ end
 
 function Initium(scanners...; ip="192.168.129.7", crs="111", npp=64, lrn=1,
                  bufsize=65_000, addallports=true)
-    dev = Initium(ip, crs=crs)
-
-    addscanners(dev, scsanners...; npp=npp, lrn=lrn)
-
-    # Allocate buffer
-    nchans = availablechans(dev)
-    w = 24 + nchans*4  # Maximum number of bytes per frame
-    resize!(dev.buffer, w, bufsize)
-
-    if addallports
-        # Add all possible pressure ports 
-        for i in 1:5
-            addallpressports(dev, stbl)
-        end
+    try
+        dev = Initium(ip, crs=crs)
+        addscanners(dev, scanners...; npp=npp, lrn=lrn)
+        # Allocate buffer
+        nchans = availablechans(dev)
+        w = 24 + nchans*4  # Maximum number of bytes per frame
+        println((w,bufsize))
+        resize!(dev.buffer, w, bufsize)
         
-    end    
+        if addallports
+            # Add all possible pressure ports 
+            for stbl in 1:5
+                addallpressports(dev, stbl)
+            end
+        end
+        return dev
+    catch e
+        isopen(dev.sock) && close(dev.sock)
+        throw(e)
+    end
     
 end
 

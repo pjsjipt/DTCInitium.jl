@@ -6,7 +6,7 @@ end
 
 function AbstractDAQ.daqconfig(dev::Initium; freq=1, nsamples=0, avg=1, trigger=0, stbl=1)
     
-    ms = Int(1000/freq)
+    ms = round(Int, 1000/freq)
     nfr = avg
     nms = nsamples
     msd = ms
@@ -40,10 +40,9 @@ function readscanner!(dev, stbl=1)
      
     tsk = dev.task
     buf = dev.buffer
-
     nsamples = par[:nms]
     
-    if nsamples > length(buf)
+    if nsamples > capacity(buf)
         resize!(buf, nsamples)
     end
     
@@ -75,23 +74,34 @@ function readscanner!(dev, stbl=1)
     tn = t1
     #if ptype == 4 || ptype == 128  # Confirmation or error
     stopped = false
-    if nsamples == 0
-        nn = 65000
-    else
-        nn = nsamples
-    end
-    
-    for i in 2:nn
+    i = 1
+    while true
+        # Test if daq is non continuous and we have already read nsamples
+        i += 1
+        if (nsamples > 0 && i > nsamples)
+            break
+        end
+
+        # Check if we should stop reading
+        if tsk.stop
+            stopped = true
+            break
+        end
+        
+        # Read packet
         b = nextbuffer(buf) 
         ptype = readresponse!(io, b)
         tn = time_ns()
         rtype = resptype(b)
-        if rtype==4 || rtype == 128 || tsk.stop
+        # Is packet error or confirmation - daq has ended
+        if rtype==4 || rtype == 128 
             # We don't need to store this packet!
             pop!(b)
             stopped = true
             break
         end
+        tsk.nread += 1
+        # Set timing stuff
         settiming!(tsk, t1, tn, i-1)
     end
 
@@ -107,20 +117,23 @@ end
 
 function readpressure(dev, stbl=1)
     tsk  = dev.task
-    buf = dev.buf
+    buf = dev.buffer
 
     nt = length(buf)
-    nch = numchannels(dev, stbl)
+    nch = numchannels(dev, stbl=stbl)
 
     P = Matrix{Float32}(undef, nch, nt)
-
+    idx = (1:nch*4) .+ 24
     for i in 1:nt
-        P[:,i] .= ntoh.(buf[i][25:end])
+        P[:,i] .= ntoh.(reinterpret(Float32,buf[i][idx]))
     end
 
     return P
     
 end
+
+AbstractDAQ.isreading(dev::Initium) = dev.task.isreading
+AbstractDAQ.samplesread(dev::Initium) = dev.task.nread
 
 
 function AbstractDAQ.daqacquire(dev::Initium; stbl=1)
@@ -132,7 +145,7 @@ function AbstractDAQ.daqacquire(dev::Initium; stbl=1)
     return P, fs
 end
 
-function Abstract.daqstart(dev::Initium, usethread=false; stbl=1)
+function AbstractDAQ.daqstart(dev::Initium, usethread=false; stbl=1)
     if isreading(dev)
         error("DTC Initium already reading!")
     end
@@ -146,7 +159,7 @@ function Abstract.daqstart(dev::Initium, usethread=false; stbl=1)
     dev.task.task = tsk
 end
 
-function Abstract.daqread(dev::Initium; stbl=1)
+function AbstractDAQ.daqread(dev::Initium; stbl=1)
     sleep(0.1)
     while isreading(dev)
         sleep(0.1)
@@ -157,7 +170,7 @@ function Abstract.daqread(dev::Initium; stbl=1)
     return P, fs
 end
 
-function daqstop(dev::Initium)
+function AbstractDAQ.daqstop(dev::Initium)
     tsk = dev.task
 
     tsk.stop = true
@@ -172,4 +185,4 @@ AbstractDAQ.numchannels(dev::Initium; stbl=1) = dev.chans[stbl].nchans
 """
 
 """
-daqchannels(dev::Initium, stbl=1) = dev.chans[stbl].channels
+AbstractDAQ.daqchannels(dev::Initium, stbl=1) = dev.chans[stbl].channels
