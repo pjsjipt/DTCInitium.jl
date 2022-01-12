@@ -8,9 +8,10 @@ export Initium, SD1, SD2, SD3, SD5, PC4, CA2, AD0, AD2, socket
 export readresponse, readresponse!
 export scannerlist, SD1cmd, daqparams, setparams, SD2cmd
 export addscanners
-export daqaddinput, daqconfig, daqacquire, daqacquire!, daqconfig
-export daqstart, daqread, daqread!, daqstop
+export daqaddinput, daqconfig, daqacquire, daqconfig, daqconfigdev
+export daqstart, daqread, daqstop
 export daqchannels
+export dtcsetstbl!
 export DAQTask
 
 
@@ -90,9 +91,22 @@ function Initium(scanners...; ip="192.168.129.7", crs="111", npp=64, lrn=1,
     
 end
 
-function addallpressports(dev, stbl=1)
 
-    if stbl < 1 || stbl > 5
+function dtcsetstbl!(dev::Initium, stbl)
+    if 1 ≤ stbl ≤ 5
+        dev.stbl = stbl
+    end
+    return stbl
+end
+
+
+
+function addallpressports(dev, stbl=-1)
+    # Negative stbl: use value dev.stbl
+    if stbl < 1
+        stbl = dev.stbl
+    end
+        if  stbl > 5
         throw(ArgumentError("stbl should be between 1 and 5. Got $stbl!"))
     end
     
@@ -148,10 +162,15 @@ end
 getcrs(dev::Initium) = dev.crs
 scanners(dev::Initium) = dev.scanners
 socket(dev::Initium) = dev.sock
-daqparams(dev::Initium, stbl=1) = dev.params[stbl]
+function daqparam(dev::Initium, stbl=-1)
+    if stbl < 1
+        stbl = dev.stbl
+    end
+    return dev.params[stbl]
+end
+
 ipaddr(dev::Initium) = dev.ipaddr
 portnum(dev::Initium) = dev.port
-setstbl!(dev::Initium, stbl)= dev.stbl = stbl
 
 
 include("errorcodes.jl")
