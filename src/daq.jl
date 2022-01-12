@@ -8,17 +8,109 @@ function AbstractDAQ.daqaddinput(dev::Initium, ports...; stbl=-1)
     SD3(dev, stbl, plst)
 end
 
-function AbstractDAQ.daqconfig(dev::Initium; freq=1, nsamples=0, avg=1,
-                               trigger=0, stbl=-1)
+function AbstractDAQ.daqconfigdev(dev::Initium; stbl=-1, kw...)
     if stbl < 1
         stbl = dev.stbl
     end
     
-    ms = round(Int, 1000/freq)
-    nfr = avg
-    nms = nsamples
-    msd = ms
-    SD2(dev, stbl=stbl, nfr=nfr, nms=nsamples, msd=ms, trm=trigger, scm=1, ocf=2)
+    k = keys(kw)
+    p = dev.params[stbl]
+    if :nfr ∈ k
+        nfr = kw[:nfr]
+        if nfr < 1 || nfr > 127
+            throw(DomainError(nfr, "nfr range is 1-127!"))
+        end
+    else
+        nfr = p[:nfr]
+    end
+
+    if :nms ∈ k
+        nms = kw[:nms]
+        if !(0 ≤ nms ≤ 65_000)
+            throw(DomainError(nms, "nms range is 0-65_000!"))
+        end
+    else
+        nms = p[:nms]
+    end
+
+    if :msd ∈ k
+        msd = kw[:msd]
+        if !(0 ≤ msd ≤ 600_000)
+            throw(DomainError(msd, "msd range is 0-600_000!"))
+        end
+    else
+        msd = p[:msd]
+    end
+
+    if :trm ∈ k
+        trm = kw[:trm]
+        if trm < 0 && trm > 2
+            throw(DomainError(trm, "trm should be 0, 1 or 2!"))
+        end
+    else
+        trm = p[:trm]
+    end
+            
+    scm = 1
+    ocf = 2
+
+    SD2(dev, stbl=stbl, nfr=nfr, nms=nms, msd=msd, trm=trm, scm=scm, ocf=ocf)
+end
+
+            
+    
+function AbstractDAQ.daqconfig(dev::Initium; stbl=-1, kw...)
+    if stbl < 1
+        stbl = dev.stbl
+    end
+
+    p = dev.params[stbl]
+    
+    if haskey(kw, :avg)
+        nfr = kw[:avg]
+    else
+        nfr = p[:nfr]
+    end
+
+    if haskey(kw, :nms) && haskey(kw, dt)
+        error("Parameters `freq` and `dt` can not be specified simultaneously!")
+    elseif haskey(kw, :freq) || haskey(kw, :dt)
+        if haskey(kw, :freq)
+            freq = kw[:freq]
+            msd = round(Int, 1000/freq)
+        elseif haskey(kw, :dt)
+            dt = kw[:dt]
+            msd = round(Int, 1000*dt)
+        else
+            msd = p[:msd]
+        end
+    end
+
+    if haskey(kw, :nsamples) && haskey(kw, :time)
+        error("Parameters `nsamples` and `time` can not be specified simultaneously!")
+    elseif haskey(kw, :nsamples) || haskey(kw, :time)
+        if haskey(kw, :nsamples)
+            nms = kw[:nsamples]
+        else haskey(kw, :time)
+            tt = kw[:time]
+            # If actx = 0: dt ≈ 2.5 (better check these values)
+            # if actx = 1: dt ≈ 8 (fastest ?  daq when with nfr=1)
+            dt0 = 3.0 # Approximate fastest data acquisition
+            dt1 = 6.0  # Better check this
+            dt_temp = dt1 - dt0
+            dt2 = (dev.actx==0) ? (nfr*dt0) : (nfr*dt0 + dt_temp)
+            dt = max(dt2, msd)
+            nms = round(Int, time * 1000 / dt)
+        end
+    else
+        nms = p[:nms]
+    end
+
+    if haskey(kw, :trigger)
+        trm = kw[:trigger]
+    end
+
+    daqconfigdev(dev, stbl=stbl, nfr=nfr, nms=nms, msd=msd, trm=trm, scm=1, ocf=2)
 
 end
 
@@ -42,7 +134,7 @@ function readscanner!(dev, stbl=-1)
     io = socket(dev)
     isopen(io) || throw(ArgumentError("Socket not open!"))
     
-    par = daqparams(dev, stbl)
+    par = dev.params[stbl]
 
     # Only EU units without temp-sets
     if par[:ocf] != 2
@@ -75,9 +167,7 @@ function readscanner!(dev, stbl=-1)
     rtype = resptype(b)
     if rtype==4 || rtype == 128 || tsk.stop
         tsk.isreading = false
-        tsk.nread = 0
-        tsk.idx = 0
-        initbuffer!(tsk)
+        cleartask!(tsk)
         return
     end
     
@@ -118,11 +208,23 @@ function readscanner!(dev, stbl=-1)
 
     tsk.isreading = false
     
-    if !stopped
+    if stopped
         # Got here without the break. Normal operation. 
         # Read the end buffer
+        while true
+            sleep(0.5)
+            b = readresponse(io)
+            rtype = resptype(b)
+            if rtype == 4 || rtype == 128
+                break
+            end
+        end
+        
+    else
+        sleep(0.1)
         b = readresponse(io)
     end
+    
     return
 end
 
@@ -179,16 +281,26 @@ function AbstractDAQ.daqstart(dev::Initium, usethread=false; stbl=-1)
     end
 
     dev.task.task = tsk
+    return tsk
 end
 
 function AbstractDAQ.daqread(dev::Initium; stbl=-1)
     if stbl < 1
         stbl = dev.stbl
     end
-    sleep(0.1)
-    while isreading(dev)
-        sleep(0.1)
+
+    # If we are doing continuous data acquisition, we first need to stop it
+    if dev.params[stbl][:nms] == 0
+        # Stop reading!
+        daqstop(dev)
     end
+
+    # Wait for the task to end (if it was started
+    if !istaskdone(dev.task.task) && istaskstarted(dev.task.task)
+        wait(dev.task.task)
+    end
+    
+    # Read the pressure and the sampling frequency
     fs = samplingfreq(dev.task)
     P = readpressure(dev, stbl)
 
@@ -197,10 +309,14 @@ end
 
 function AbstractDAQ.daqstop(dev::Initium)
     tsk = dev.task
-
-    tsk.stop = true
-    AD0(dev)
-    
+    # If DTC is scanning, we need to stop it
+    if !istaskdone(tsk.task) && istaskstarted(tsk.task)
+        tsk.stop = true
+        AD0(dev)
+        wait(tsk.task)
+    end
+    dev.task.stop = false
+    dev.task.isreading = false
 end
 
 

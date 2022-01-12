@@ -10,8 +10,9 @@ export scannerlist, SD1cmd, daqparams, setparams, SD2cmd
 export addscanners
 export daqaddinput, daqconfig, daqacquire, daqconfig, daqconfigdev
 export daqstart, daqread, daqstop
-export daqchannels
-export dtcsetstbl!
+export daqchannels, samplesread, isreading
+export dtcsetstbl!, setfastdaq!
+
 export DAQTask
 
 
@@ -58,6 +59,7 @@ function Initium(ip::String; crs="111")
         dev = Initium(ip1, port, sock, crs, Tuple{Int,Int,Int}[], 1, 1, tsk,
                       CircMatBuffer{UInt8}(), 
                       Dict{Int,Dict{Symbol,Int32}}(), Dict{Int,Vector{DTCChannels}}())
+        dtcsetstbl!(dev, 1)
         return dev
     catch e
         isopen(sock) && close(sock)
@@ -68,14 +70,23 @@ end
 
 function Initium(scanners...; ip="192.168.129.7", crs="111", npp=64, lrn=1,
                  bufsize=65_000, addallports=true)
+    sock = TCPSocket()
+    
     try
         dev = Initium(ip, crs=crs)
+        sock = socket(dev)
         addscanners(dev, scanners...; npp=npp, lrn=lrn)
         # Allocate buffer
         nchans = availablechans(dev)
         w = 24 + nchans*4  # Maximum number of bytes per frame
-        println((w,bufsize))
         resize!(dev.buffer, w, bufsize)
+
+        dtcsetstbl!(dev, 1)
+        
+        # Default data acquisition parameters
+        for stbl in 1:5
+            SD2(dev, stbl=stbl)
+        end
         
         if addallports
             # Add all possible pressure ports 
@@ -83,9 +94,11 @@ function Initium(scanners...; ip="192.168.129.7", crs="111", npp=64, lrn=1,
                 addallpressports(dev, stbl)
             end
         end
+
+            
         return dev
     catch e
-        isopen(dev.sock) && close(dev.sock)
+        isopen(sock) && close(sock)
         throw(e)
     end
     
@@ -99,6 +112,11 @@ function dtcsetstbl!(dev::Initium, stbl)
     return stbl
 end
 
+function setfastdaq!(dev::Initium, fast=true)
+
+    actx = fast ? 0 : 1
+    SD5(dev, actx)
+end
 
 
 function addallpressports(dev, stbl=-1)
