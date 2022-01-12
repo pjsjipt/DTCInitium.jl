@@ -13,7 +13,6 @@ export daqstart, daqread, daqread!, daqstop
 export daqchannels
 export DAQTask
 
-abstract type AbstractPressureScanner <: AbstractDaqDevice end
 
 
 include("ports.jl")
