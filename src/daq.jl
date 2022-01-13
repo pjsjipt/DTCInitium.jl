@@ -55,6 +55,7 @@ function AbstractDAQ.daqconfigdev(dev::Initium; stbl=-1, kw...)
     ocf = 2
 
     SD2(dev, stbl=stbl, nfr=nfr, nms=nms, msd=msd, trm=trm, scm=scm, ocf=ocf)
+    updateconf!(dev, stbl=stbl)
 end
 
             
@@ -339,3 +340,11 @@ function AbstractDAQ.daqchannels(dev::Initium, stbl=-1)
     dev.chans[stbl].channels
 end
 
+function AbstractDAQ.daqzero(dev::Initium; lrn=1, time=15)
+
+    CA2(dev; lrn=lrn)
+
+    sleep(time)
+end
+
+    

@@ -9,7 +9,7 @@ export readresponse, readresponse!
 export scannerlist, SD1cmd, daqparams, setparams, SD2cmd
 export addscanners
 export daqaddinput, daqconfig, daqacquire, daqconfig, daqconfigdev
-export daqstart, daqread, daqstop
+export daqstart, daqread, daqstop, daqzero
 export daqchannels, samplesread, isreading
 export dtcsetstbl!, setfastdaq!
 
@@ -45,6 +45,7 @@ mutable struct Initium <: AbstractPressureScanner
     buffer::CircMatBuffer{UInt8}
     params::Dict{Int,Dict{Symbol,Int32}}
     chans::Dict{Int,DTCChannels}
+    conf::Dict{Int,DAQConfig}
 end
 
 
@@ -56,9 +57,18 @@ function Initium(ip::String; crs="111")
 
     try
         tsk = DAQTask()
+        conf = Dict{Int,DAQConfig}()
+        for i in 1:5
+            ipars = Dict{String,Int}("stbl"=>i, "actx"=>1)
+            fpars = Dict{String,Float64}()
+            spars = Dict{String,String}()
+            conf[i] = DAQConfig(ipars, fpars, spars ;devname="DTCInitium",
+                                model="DTCInitium", sn="", tag="", ip=ip)
+        end
         dev = Initium(ip1, port, sock, crs, Tuple{Int,Int,Int}[], 1, 1, tsk,
                       CircMatBuffer{UInt8}(), 
-                      Dict{Int,Dict{Symbol,Int32}}(), Dict{Int,Vector{DTCChannels}}())
+                      Dict{Int,Dict{Symbol,Int32}}(), Dict{Int,Vector{DTCChannels}}(),
+                      conf)
         dtcsetstbl!(dev, 1)
         return dev
     catch e
@@ -86,6 +96,7 @@ function Initium(scanners...; ip="192.168.129.7", crs="111", npp=64, lrn=1,
         # Default data acquisition parameters
         for stbl in 1:5
             SD2(dev, stbl=stbl)
+            updateconf!(dev, stbl=stbl)
         end
         
         if addallports
@@ -104,6 +115,26 @@ function Initium(scanners...; ip="192.168.129.7", crs="111", npp=64, lrn=1,
     
 end
 
+function updateconf!(dev; stbl=-1)
+    if stbl < 1
+        stbl = dev.stbl
+    end
+
+    p1 = dev.params[stbl]
+    p = dev.conf[stbl]
+    ipars = p.ipars
+    ipars["stbl"] = stbl
+    ipars["nfr"] = p1[:nfr]
+    ipars["nms"] = p1[:nms]
+    ipars["msd"] = p1[:msd]
+    ipars["trm"] = p1[:trm]
+    ipars["scm"] = p1[:scm]
+    ipars["ocf"] = p1[:ocf]
+    ipars["actx"] = dev.actx
+    return
+    
+end
+
 
 function dtcsetstbl!(dev::Initium, stbl)
     if 1 ≤ stbl ≤ 5
@@ -116,6 +147,11 @@ function setfastdaq!(dev::Initium, fast=true)
 
     actx = fast ? 0 : 1
     SD5(dev, actx)
+
+    for i in 1:5
+        dev.conf[i].ipars["actx"] = actx
+    end
+    return
 end
 
 
