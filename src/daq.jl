@@ -262,9 +262,9 @@ function AbstractDAQ.daqstart(dev::Initium, usethread=false)
     end
 
     if usethread
-        tsk = Threads.@spawn readscanner!(dev, stbl)
+        tsk = Threads.@spawn readscanner!(dev)
     else
-        tsk = @async readscanner!(dev, stbl)
+        tsk = @async readscanner!(dev)
     end
 
     dev.task.task = tsk
@@ -287,7 +287,7 @@ function AbstractDAQ.daqread(dev::Initium)
     
     # Read the pressure and the sampling frequency
     fs = samplingfreq(dev.task)
-    P = readpressure(dev, stbl)
+    P = readpressure(dev)
 
     return P, fs
 end
