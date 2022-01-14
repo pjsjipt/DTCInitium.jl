@@ -1,20 +1,15 @@
 
-function AbstractDAQ.daqaddinput(dev::Initium, ports...; stbl=-1)
-    if stbl < 1
-        stbl = dev.stbl
-    end
-    
+function AbstractDAQ.daqaddinput(dev::Initium, ports...)
+    stbl = dev.stbl
     plst = portlist(ports...)
     SD3(dev, stbl, plst)
 end
 
-function AbstractDAQ.daqconfigdev(dev::Initium; stbl=-1, kw...)
-    if stbl < 1
-        stbl = dev.stbl
-    end
+function AbstractDAQ.daqconfigdev(dev::Initium; kw...)
+    stbl = dev.stbl
     
     k = keys(kw)
-    p = dev.params[stbl]
+    p = dev.params
     if :nfr ∈ k
         nfr = kw[:nfr]
         if nfr < 1 || nfr > 127
@@ -55,17 +50,15 @@ function AbstractDAQ.daqconfigdev(dev::Initium; stbl=-1, kw...)
     ocf = 2
 
     SD2(dev, stbl=stbl, nfr=nfr, nms=nms, msd=msd, trm=trm, scm=scm, ocf=ocf)
-    updateconf!(dev, stbl=stbl)
+    updateconf!(dev)
 end
 
             
     
-function AbstractDAQ.daqconfig(dev::Initium; stbl=-1, kw...)
-    if stbl < 1
-        stbl = dev.stbl
-    end
+function AbstractDAQ.daqconfig(dev::Initium; kw...)
+    stbl = dev.stbl
 
-    p = dev.params[stbl]
+    p = dev.params
     
     if haskey(kw, :avg)
         nfr = kw[:avg]
@@ -127,15 +120,13 @@ function readresponse!(io, buf)
     return resptype(buf)
 end
 
-function readscanner!(dev, stbl=-1)
-    if stbl < 1
-        stbl = dev.stbl
-    end
+function readscanner!(dev)
+    stbl = dev.stbl
 
     io = socket(dev)
     isopen(io) || throw(ArgumentError("Socket not open!"))
     
-    par = dev.params[stbl]
+    par = dev.params
 
     # Only EU units without temp-sets
     if par[:ocf] != 2
@@ -229,16 +220,13 @@ function readscanner!(dev, stbl=-1)
     return
 end
 
-function readpressure(dev, stbl=-1)
-    if stbl < 1
-        stbl = dev.stbl
-    end
-    
+function readpressure(dev)
+    stbl = dev.stbl
     tsk  = dev.task
     buf = dev.buffer
 
     nt = length(buf)
-    nch = numchannels(dev, stbl=stbl)
+    nch = numchannels(dev)
 
     P = Matrix{Float32}(undef, nch, nt)
     idx = (1:nch*4) .+ 24
@@ -254,22 +242,20 @@ AbstractDAQ.isreading(dev::Initium) = dev.task.isreading
 AbstractDAQ.samplesread(dev::Initium) = dev.task.nread
 
 
-function AbstractDAQ.daqacquire(dev::Initium; stbl=-1)
-    if stbl < 1
-        stbl = dev.stbl
-    end
+function AbstractDAQ.daqacquire(dev::Initium)
+    stbl = dev.stbl
+    numchannels(dev) == 0 && error("No channels configured for stbl=$stbl!")
 
-    readscanner!(dev, stbl)
+    readscanner!(dev)
     fs = samplingfreq(dev.task)
-    P = readpressure(dev, stbl)
+    P = readpressure(dev)
 
     return P, fs
 end
 
-function AbstractDAQ.daqstart(dev::Initium, usethread=false; stbl=-1)
-    if stbl < 1
-        stbl = dev.stbl
-    end
+function AbstractDAQ.daqstart(dev::Initium, usethread=false)
+    stbl = dev.stbl
+    numchannels(dev) == 0 && error("No channels configured for stbl=$stbl!")
     
     if isreading(dev)
         error("DTC Initium already reading!")
@@ -285,13 +271,11 @@ function AbstractDAQ.daqstart(dev::Initium, usethread=false; stbl=-1)
     return tsk
 end
 
-function AbstractDAQ.daqread(dev::Initium; stbl=-1)
-    if stbl < 1
-        stbl = dev.stbl
-    end
+function AbstractDAQ.daqread(dev::Initium)
+    stbl = dev.stbl
 
     # If we are doing continuous data acquisition, we first need to stop it
-    if dev.params[stbl][:nms] == 0
+    if dev.params[:nms] == 0
         # Stop reading!
         daqstop(dev)
     end
@@ -321,29 +305,16 @@ function AbstractDAQ.daqstop(dev::Initium)
 end
 
 
-function AbstractDAQ.numchannels(dev::Initium; stbl=-1)
-    if stbl < 1
-        stbl = dev.stbl
-    end
-
-    return dev.chans[stbl].nchans
-end
+AbstractDAQ.numchannels(dev::Initium) = dev.chans.nchans
     
 """
 
 """
-function AbstractDAQ.daqchannels(dev::Initium, stbl=-1)
-    if stbl < 1
-        stbl = dev.stbl
-    end
+AbstractDAQ.daqchannels(dev::Initium) = dev.chans.channels
 
-    dev.chans[stbl].channels
-end
 
 function AbstractDAQ.daqzero(dev::Initium; lrn=1, time=15)
-
     CA2(dev; lrn=lrn)
-
     sleep(time)
 end
 

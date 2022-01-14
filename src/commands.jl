@@ -116,7 +116,7 @@ function SD2(dev::Initium; stbl=1, nfr=64, nms=1, msd=100, trm=0, scm=1, ocf=2)
     resp = read(io, 8)
     ispackerr(resp) && throw(DTCInitiumError(resperr(resp)))
 
-    dev.params[stbl] = params
+    dev.params = params
    
     return respconf(resp)
                  
@@ -167,7 +167,7 @@ function SD3(dev::Initium, stbl, ports::AbstractVector{PortRange})
 
     chans = defscanlist(scanners(dev), ports)
     
-    dev.chans[stbl] = DTCChannels(length(chans), ports, chans)
+    dev.chans = DTCChannels(length(chans), ports, chans)
     
     return respconf(resp)
                  

@@ -10,7 +10,7 @@ export scannerlist, SD1cmd, daqparams, setparams, SD2cmd
 export addscanners
 export daqaddinput, daqconfig, daqacquire, daqconfig, daqconfigdev
 export daqstart, daqread, daqstop, daqzero
-export daqchannels, samplesread, isreading
+export daqchannels, numchannels, samplesread, isreading
 export dtcsetstbl!, setfastdaq!
 
 export DAQTask
@@ -24,6 +24,9 @@ struct DTCChannels
     plst::Vector{PortRange}
     channels::Vector{Int}
 end
+DTCChannels() = DTCChannels(0, PortRange[], Int[])
+
+
 
 mutable struct Initium <: AbstractPressureScanner
     "IP address of the device"
@@ -43,33 +46,36 @@ mutable struct Initium <: AbstractPressureScanner
     "DAQ Task handler - stores binary data"
     task::DAQTask
     buffer::CircMatBuffer{UInt8}
-    params::Dict{Int,Dict{Symbol,Int32}}
-    chans::Dict{Int,DTCChannels}
-    conf::Dict{Int,DAQConfig}
+    params::Dict{Symbol,Int}
+    chans::DTCChannels
+    conf::DAQConfig
+    stbldev::Dict{Int, Initium}
 end
 
 
-function Initium(ip::String; crs="111")
+function Initium(devname::String, ip::String; stbl=1, crs="111")
+
+    if !(1 ≤ stbl ≤ 5)
+        error("DA Setup table (`stbl`) should be 1-5!")
+    end
     
     ip1 = IPv4(ip)
     port = 8400
     sock = opensock(ip1, port)
-
+    
     try
         tsk = DAQTask()
-        conf = Dict{Int,DAQConfig}()
-        for i in 1:5
-            ipars = Dict{String,Int}("stbl"=>i, "actx"=>1)
-            fpars = Dict{String,Float64}()
-            spars = Dict{String,String}()
-            conf[i] = DAQConfig(ipars, fpars, spars ;devname="DTCInitium",
-                                model="DTCInitium", sn="", tag="", ip=ip)
-        end
-        dev = Initium(ip1, port, sock, crs, Tuple{Int,Int,Int}[], 1, 1, tsk,
-                      CircMatBuffer{UInt8}(), 
-                      Dict{Int,Dict{Symbol,Int32}}(), Dict{Int,Vector{DTCChannels}}(),
-                      conf)
-        dtcsetstbl!(dev, 1)
+
+        ipars = Dict{String,Int}("stbl"=>stbl, "actx"=>1)
+        fpars = Dict{String,Float64}()
+        spars = Dict{String,String}()
+        conf = DAQConfig(ipars, fpars, spars ;devname=devname,
+                         model="DTCInitium", sn="", tag="", ip=ip)
+        
+        dev = Initium(ip1, port, sock, crs, Tuple{Int,Int,Int}[], stbl, 1, tsk,
+                      CircMatBuffer{UInt8}(), Dict{Symbol,Int}(),
+                      DTCChannels(), conf, Dict{Int,Initium}())
+        dev.stbldev[stbl] = dev
         return dev
     catch e
         isopen(sock) && close(sock)
@@ -78,12 +84,18 @@ function Initium(ip::String; crs="111")
     
 end
 
-function Initium(scanners...; ip="192.168.129.7", crs="111", npp=64, lrn=1,
+function Initium(devname::String, scanners...; stbl=1, 
+                 ip="192.168.129.7", crs="111", npp=64, lrn=1,
                  bufsize=65_000, addallports=true)
+
+    if !(1 ≤ stbl ≤ 5)
+        error("DA Setup table (`stbl`) should be 1-5!")
+    end
+
     sock = TCPSocket()
     
     try
-        dev = Initium(ip, crs=crs)
+        dev = Initium(devname, ip; crs=crs, stbl=stbl)
         sock = socket(dev)
         addscanners(dev, scanners...; npp=npp, lrn=lrn)
         # Allocate buffer
@@ -91,22 +103,15 @@ function Initium(scanners...; ip="192.168.129.7", crs="111", npp=64, lrn=1,
         w = 24 + nchans*4  # Maximum number of bytes per frame
         resize!(dev.buffer, w, bufsize)
 
-        dtcsetstbl!(dev, 1)
-        
         # Default data acquisition parameters
-        for stbl in 1:5
-            SD2(dev, stbl=stbl)
-            updateconf!(dev, stbl=stbl)
-        end
+        SD2(dev, stbl=stbl)
+        updateconf!(dev)
         
         if addallports
             # Add all possible pressure ports 
-            for stbl in 1:5
-                addallpressports(dev, stbl)
-            end
+            addallpressports(dev)
         end
 
-            
         return dev
     catch e
         isopen(sock) && close(sock)
@@ -115,13 +120,37 @@ function Initium(scanners...; ip="192.168.129.7", crs="111", npp=64, lrn=1,
     
 end
 
-function updateconf!(dev; stbl=-1)
-    if stbl < 1
-        stbl = dev.stbl
-    end
 
-    p1 = dev.params[stbl]
-    p = dev.conf[stbl]
+function Initium(devname::String, dev::Initium, stbl::Int)
+    if !(1 ≤ stbl ≤ 5)
+        error("DA Setup table (`stbl`) should be 1-5!")
+    end
+    
+    if haskey(dev.stbldev, stbl)
+        # This subdevice has already been created!
+        # Just return it!
+        return dev.stbldev[stbl]
+    end
+    conf = DAQConfig(devname=devname, ip=daqdevip(dev),
+                     model = daqdevmodel(dev), sn=daqdevserialnum(dev),
+                     tag=daqdevtag(dev))
+    conf.ipars["stbl"] = stbl
+    conf.ipars["actx"] = dev.actx
+    
+    newdev = Initium(dev.ipaddr, dev.port, dev.sock, dev.crs,
+                     dev.scanners, stbl, dev.actx, dev.task,
+                     dev.buffer, Dict{Symbol,Int}(), DTCChannels(), conf, dev.stbldev)
+    dev.stbldev[stbl] = newdev
+    # Get a default configuration
+    SD2(newdev, stbl=stbl)
+    return newdev
+end
+
+function updateconf!(dev)
+    stbl = dev.stbl
+
+    p1 = dev.params
+    p = dev.conf
     ipars = p.ipars
     ipars["stbl"] = stbl
     ipars["nfr"] = p1[:nfr]
@@ -136,33 +165,19 @@ function updateconf!(dev; stbl=-1)
 end
 
 
-function dtcsetstbl!(dev::Initium, stbl)
-    if 1 ≤ stbl ≤ 5
-        dev.stbl = stbl
-    end
-    return stbl
-end
+function setfastdaq!(dev::Initium, actx=1)
 
-function setfastdaq!(dev::Initium, fast=true)
-
-    actx = fast ? 0 : 1
     SD5(dev, actx)
-
-    for i in 1:5
-        dev.conf[i].ipars["actx"] = actx
+    # This is a global parameter! Should update ALL subdevices!
+    for (stbl, xdev) in dev.stbldev
+        xdev.conf.ipars["actx"] = actx
     end
     return
 end
 
 
-function addallpressports(dev, stbl=-1)
-    # Negative stbl: use value dev.stbl
-    if stbl < 1
-        stbl = dev.stbl
-    end
-        if  stbl > 5
-        throw(ArgumentError("stbl should be between 1 and 5. Got $stbl!"))
-    end
+function addallpressports(dev)
+    stbl = dev.stbl
     
     plst = PortRange[]
 
@@ -174,18 +189,17 @@ function addallpressports(dev, stbl=-1)
     SD3(dev, stbl, plst)
 
     chans = defscanlist(dev.scanners, plst)
-    dev.chans[stbl] = DTCChannels(length(chans), plst, chans)
+    dev.chans = DTCChannels(length(chans), plst, chans)
 end
 
     
 "Total number of available channels in the scanners"
 availablechans(dev::Initium) = availablechans(dev.scanners)
 
-#defscanlist(dev::Initium, stbl=1) = defscanlist(scanners(dev), dev.chans[stbl])
 
+Base.open(dev::Initium) = dev.sock = opensock(ipaddr(dev), portnum(dev))
+Base.close(dev::Initium) = close(dev.sock)
 
-import Base.open
-open(dev::Initium) = dev.sock = opensock(ipaddr(dev), portnum(dev))
 
 function addscanners(dev::Initium, lst...; npp=64, lrn=1)
     
@@ -216,12 +230,7 @@ end
 getcrs(dev::Initium) = dev.crs
 scanners(dev::Initium) = dev.scanners
 socket(dev::Initium) = dev.sock
-function daqparam(dev::Initium, stbl=-1)
-    if stbl < 1
-        stbl = dev.stbl
-    end
-    return dev.params[stbl]
-end
+daqparam(dev::Initium) = dev.params
 
 ipaddr(dev::Initium) = dev.ipaddr
 portnum(dev::Initium) = dev.port
