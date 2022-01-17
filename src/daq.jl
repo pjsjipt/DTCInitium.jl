@@ -1,10 +1,68 @@
 
+"""
+`daqaddinput(dev::Initium, ports...)`
+
+Add channels to the Initium.
+
+After adding scanners, the channels that should be acquired must be specified. 
+The ports can be specified as ranges, or individual channels. See [`portlist`](@ref) 
+for mor information
+
+
+## Examples
+
+```julia-repl
+julia> daqaddinput(dev, 101:104, 106)
+0
+
+julia> daqaddinput(dev, 101:104, 201:204, "301-304")
+0
+
+julia> numchannels(dev)
+12
+```
+"""
 function AbstractDAQ.daqaddinput(dev::Initium, ports...)
     stbl = dev.stbl
     plst = portlist(ports...)
     SD3(dev, stbl, plst)
 end
 
+
+"""
+`daqconfigdev(dev::Initium; kw...)`
+
+Configures data acquisition for the the DTC Initium. 
+
+This method configures data acquisition using the parameters and terminology found
+in the DTC Initium's user manual. For a more generic interface, check out
+[`daqconfig`](@dev).
+
+The exact details for daq configuration in this case can be found under the command SD2 in the user manual.
+
+The following parameters can be configured
+
+ * `nfr` Number of frames that will be averaged (1-127)
+ * `nms` Number of pressure samples that should be read. 0-65000. Use 0 for continuous reading.
+ * `msd` Time interval in ms between pressure samples. If reading takes longer, a longer period of time will be used.
+ * `trm` Trigger
+    - 0 for internal software trigger
+    - 1 for triggering only the initial measurement
+    - 2 for triggering each measurement
+
+There are other parameters that can be configured but they are not 
+used in this interface.
+
+```julia-repl
+julia> daqconfigdev(dev, nfr=1, nms=2000, msd=0)
+
+julia> daqconfigdev(dev, nfr=1, nms=2000, msd=0) # Acquire 2000 points as fas as possible
+
+julia> daqconfigdev(dev, nfr=1, nms=10, msd=20) # Acquire 10 points every 20 ms
+
+julia> daqconfigdev(dev, nfr=10, nms=10, msd=200) # Acquire 10 points every 200 ms. Average 10 pressure measurements before outputing data
+```
+"""
 function AbstractDAQ.daqconfigdev(dev::Initium; kw...)
     stbl = dev.stbl
     
@@ -15,8 +73,10 @@ function AbstractDAQ.daqconfigdev(dev::Initium; kw...)
         if nfr < 1 || nfr > 127
             throw(DomainError(nfr, "nfr range is 1-127!"))
         end
-    else
+    elseif haskey(p, :nfr)
         nfr = p[:nfr]
+    else
+        nfr = 1
     end
 
     if :nms ∈ k
@@ -24,8 +84,10 @@ function AbstractDAQ.daqconfigdev(dev::Initium; kw...)
         if !(0 ≤ nms ≤ 65_000)
             throw(DomainError(nms, "nms range is 0-65_000!"))
         end
-    else
+    elseif haskey(p, :nms)
         nms = p[:nms]
+    else
+        nms = 1
     end
 
     if :msd ∈ k
@@ -33,8 +95,10 @@ function AbstractDAQ.daqconfigdev(dev::Initium; kw...)
         if !(0 ≤ msd ≤ 600_000)
             throw(DomainError(msd, "msd range is 0-600_000!"))
         end
-    else
+    elseif haskey(p, :msd)
         msd = p[:msd]
+    else
+        msd = 100
     end
 
     if :trm ∈ k
@@ -42,8 +106,10 @@ function AbstractDAQ.daqconfigdev(dev::Initium; kw...)
         if trm < 0 && trm > 2
             throw(DomainError(trm, "trm should be 0, 1 or 2!"))
         end
-    else
+    elseif haskey(p, :trm)
         trm = p[:trm]
+    else
+        trm = 0
     end
             
     scm = 1
@@ -119,7 +185,20 @@ function readresponse!(io, buf)
     end
     return resptype(buf)
 end
+"""
+`readscanner!(dev)`
 
+Actually execute a data acquisition on the channels specified
+by [`daqaddinput`](@ref) with daq configuration specified by [`daqconfig`](@ref) or
+[`daqconfigdev`](@ref).
+
+This function will initiate data acquisition and store the data in the
+ daq buffer (`dev.buffer`). This function will also measure the time taken 
+to read data. Data is retrieved using function [`readpressure`](@ref).
+
+This function is usually not called directly. Methods [`daqacquire`](@ref) and 
+[`daqread`](@ref) should be used.
+"""
 function readscanner!(dev)
     stbl = dev.stbl
 
@@ -137,8 +216,9 @@ function readscanner!(dev)
     buf = dev.buffer
     nsamples = par[:nms]
     
+    
     if nsamples > capacity(buf)
-        resize!(buf, nsamples)
+        resize!(buf, min(nsamples,100))
     end
     
     cleartask!(tsk)
@@ -189,7 +269,7 @@ function readscanner!(dev)
         # Is packet error or confirmation - daq has ended
         if rtype==4 || rtype == 128 
             # We don't need to store this packet!
-            pop!(b)
+            pop!(buf)
             stopped = true
             break
         end
@@ -220,6 +300,17 @@ function readscanner!(dev)
     return
 end
 
+"""
+`readpressure(dev)`
+
+Retrieve pressure measurements stored in the buffer. 
+
+The DTC Initium is large-endian. This function allocates memory for the output. It 
+*does not* empty the buffer.
+
+This function is usually not called directly. Methods [`daqacquire`](@ref) and 
+[`daqread`](@ref) should be used.
+"""
 function readpressure(dev)
     stbl = dev.stbl
     tsk  = dev.task

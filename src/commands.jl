@@ -62,11 +62,12 @@ function SD1(dev::Initium, scnlst)
     io = socket(dev)
     isopen(io) || throw(ArgumentError("Socket not open!"))
 
-    scn = scanners(dev)
+    scn = Tuple{Int,Int,Int}[]
+    #scn = scanners(dev)
 
-    if length(scn) > 0
-        throw(ArgumentError("Scanners have already been added!"))
-    end
+    #if length(scn) > 0
+    #    throw(ArgumentError("Scanners have already been added!"))
+    #end
     
     for s in scnlst
         push!(scn, s)

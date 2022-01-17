@@ -450,6 +450,11 @@ function addscanners(dev::Initium, lst...; npp=64, lrn=1)
     try
         SD1(dev, scnlst)
         dev.scanners = scnlst
+        # Set buffer width size
+        nchans = availablechans(scnlst)
+        w = 24 + nchans*4  # Maximum number of bytes per frame
+        dev.buffer.width = w
+
         # Set the default unit to Pascal (3)
         for lrn in unique([s[3] for s in scnlst])  
             PC4(dev, 3, 0, lrn=lrn)
