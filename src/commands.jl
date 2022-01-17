@@ -117,7 +117,9 @@ function SD2(dev::Initium; stbl=1, nfr=64, nms=1, msd=100, trm=0, scm=1, ocf=2)
     ispackerr(resp) && throw(DTCInitiumError(resperr(resp)))
 
     dev.params = params
-   
+
+    dev.isconfigured = true
+    
     return respconf(resp)
                  
 end
@@ -150,7 +152,7 @@ For further information, see the User Manual.
 function SD3(dev::Initium, stbl, ports::AbstractVector{PortRange})
 
     if !checkportlist(scanners(dev), ports)
-        thrown(ArgumentError("Invalid pressure ports"))
+        throw(ArgumentError("Invalid pressure ports"))
     end
 
 
@@ -168,7 +170,7 @@ function SD3(dev::Initium, stbl, ports::AbstractVector{PortRange})
     chans = defscanlist(scanners(dev), ports)
     
     dev.chans = DTCChannels(length(chans), ports, chans)
-    
+    dev.haschans = true
     return respconf(resp)
                  
 end
