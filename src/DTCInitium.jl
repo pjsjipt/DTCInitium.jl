@@ -1,7 +1,7 @@
 module DTCInitium
 
 using Sockets
-using AbstractDAQ
+using AbstractDAQs
 
 
 export Initium, SD1, SD2, SD3, SD5, PC4, CA2, AD0, AD2, socket
@@ -282,6 +282,7 @@ end
 
 function Base.show(io::IO, dev::Initium)
     println(io, "DTC Initium")
+    println(io, "    Dev Name: $(daqdevname(dev))")
     println(io, "    IP: $(string(dev.ipaddr))")
     println(io, "    stbl: $(dev.stbl)")
     println(io, "    Scanners:")

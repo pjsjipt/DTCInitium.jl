@@ -22,7 +22,7 @@ julia> numchannels(dev)
 12
 ```
 """
-function AbstractDAQ.daqaddinput(dev::Initium, ports...)
+function AbstractDAQs.daqaddinput(dev::Initium, ports...)
     stbl = dev.stbl
     plst = portlist(ports...)
     SD3(dev, stbl, plst)
@@ -63,7 +63,7 @@ julia> daqconfigdev(dev, nfr=1, nms=10, msd=20) # Acquire 10 points every 20 ms
 julia> daqconfigdev(dev, nfr=10, nms=10, msd=200) # Acquire 10 points every 200 ms. Average 10 pressure measurements before outputing data
 ```
 """
-function AbstractDAQ.daqconfigdev(dev::Initium; kw...)
+function AbstractDAQs.daqconfigdev(dev::Initium; kw...)
     stbl = dev.stbl
     
     k = keys(kw)
@@ -121,7 +121,7 @@ end
 
             
     
-function AbstractDAQ.daqconfig(dev::Initium; kw...)
+function AbstractDAQs.daqconfig(dev::Initium; kw...)
     stbl = dev.stbl
 
     p = dev.params
@@ -329,11 +329,11 @@ function readpressure(dev)
     
 end
 
-AbstractDAQ.isreading(dev::Initium) = dev.task.isreading
-AbstractDAQ.samplesread(dev::Initium) = dev.task.nread
+AbstractDAQs.isreading(dev::Initium) = dev.task.isreading
+AbstractDAQs.samplesread(dev::Initium) = dev.task.nread
 
 
-function AbstractDAQ.daqacquire(dev::Initium)
+function AbstractDAQs.daqacquire(dev::Initium)
     stbl = dev.stbl
     numchannels(dev) == 0 && error("No channels configured for stbl=$stbl!")
 
@@ -344,7 +344,7 @@ function AbstractDAQ.daqacquire(dev::Initium)
     return P, fs
 end
 
-function AbstractDAQ.daqstart(dev::Initium, usethread=false)
+function AbstractDAQs.daqstart(dev::Initium, usethread=false)
     stbl = dev.stbl
     numchannels(dev) == 0 && error("No channels configured for stbl=$stbl!")
     
@@ -362,7 +362,7 @@ function AbstractDAQ.daqstart(dev::Initium, usethread=false)
     return tsk
 end
 
-function AbstractDAQ.daqread(dev::Initium)
+function AbstractDAQs.daqread(dev::Initium)
     stbl = dev.stbl
 
     # If we are doing continuous data acquisition, we first need to stop it
@@ -383,7 +383,7 @@ function AbstractDAQ.daqread(dev::Initium)
     return P, fs
 end
 
-function AbstractDAQ.daqstop(dev::Initium)
+function AbstractDAQs.daqstop(dev::Initium)
     tsk = dev.task
     # If DTC is scanning, we need to stop it
     if !istaskdone(tsk.task) && istaskstarted(tsk.task)
@@ -396,15 +396,15 @@ function AbstractDAQ.daqstop(dev::Initium)
 end
 
 
-AbstractDAQ.numchannels(dev::Initium) = dev.chans.nchans
+AbstractDAQs.numchannels(dev::Initium) = dev.chans.nchans
     
 """
 
 """
-AbstractDAQ.daqchannels(dev::Initium) = dev.chans.channels
+AbstractDAQs.daqchannels(dev::Initium) = dev.chans.channels
 
 
-function AbstractDAQ.daqzero(dev::Initium; lrn=1, time=15)
+function AbstractDAQs.daqzero(dev::Initium; lrn=1, time=15)
     CA2(dev; lrn=lrn)
     sleep(time)
 end
