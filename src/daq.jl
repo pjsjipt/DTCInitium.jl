@@ -133,11 +133,11 @@ function AbstractDAQs.daqconfig(dev::Initium; kw...)
     end
 
     if haskey(kw, :nms) && haskey(kw, dt)
-        error("Parameters `freq` and `dt` can not be specified simultaneously!")
-    elseif haskey(kw, :freq) || haskey(kw, :dt)
-        if haskey(kw, :freq)
-            freq = kw[:freq]
-            msd = round(Int, 1000/freq)
+        error("Parameters `rate` and `dt` can not be specified simultaneously!")
+    elseif haskey(kw, :rate) || haskey(kw, :dt)
+        if haskey(kw, :rate)
+            rate = kw[:rate]
+            msd = round(Int, 1000/rate)
         elseif haskey(kw, :dt)
             dt = kw[:dt]
             msd = round(Int, 1000*dt)
@@ -338,7 +338,7 @@ function AbstractDAQs.daqacquire(dev::Initium)
     numchannels(dev) == 0 && error("No channels configured for stbl=$stbl!")
 
     readscanner!(dev)
-    fs = samplingfreq(dev.task)
+    fs = samplingrate(dev.task)
     P = readpressure(dev)
 
     return P, fs
@@ -377,7 +377,7 @@ function AbstractDAQs.daqread(dev::Initium)
     end
     
     # Read the pressure and the sampling frequency
-    fs = samplingfreq(dev.task)
+    fs = samplingrate(dev.task)
     P = readpressure(dev)
 
     return P, fs
