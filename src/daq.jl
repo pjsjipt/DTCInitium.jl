@@ -270,7 +270,7 @@ function readscanner!(dev)
         if rtype==4 || rtype == 128 
             # We don't need to store this packet!
             pop!(buf)
-            stopped = true
+            stopped = false
             break
         end
         tsk.nread += 1

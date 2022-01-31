@@ -339,6 +339,7 @@ function setfastdaq!(dev::Initium, actx=1)
     SD5(dev, actx)
     # This is a global parameter! Should update ALL subdevices!
     for (stbl, xdev) in dev.stbldev
+        xdev.actx = actx
         xdev.conf.ipars["actx"] = actx
     end
     return
