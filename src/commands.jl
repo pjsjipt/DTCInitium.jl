@@ -168,10 +168,6 @@ function SD3(dev::Initium, stbl, ports::AbstractVector{PortRange})
     resp = read(io, 8)
     ispackerr(resp) && throw(DTCInitiumError(resperr(resp)))
 
-    chans = defscanlist(scanners(dev), ports)
-    
-    dev.chans = DTCChannels(length(chans), ports, chans)
-    dev.haschans = true
     return respconf(resp)
                  
 end

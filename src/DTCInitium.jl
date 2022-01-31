@@ -19,13 +19,14 @@ export DAQTask
 
 include("ports.jl")
 
-struct DTCChannels
+mutable struct DTCChannels
     "Number of channels"
     nchans::Int
     "List of port ranges"
     plst::Vector{PortRange}
     "Channels availables"
     channels::Vector{Int}
+    channames::Vector{String}
 end
 
 """
@@ -37,7 +38,7 @@ The ports available in the DTC Initium can be specified as range or
 a sequence of ranges. Check command SD3 in the user's manual. 
 
 """
-DTCChannels() = DTCChannels(0, PortRange[], Int[])
+DTCChannels() = DTCChannels(0, PortRange[], Int[], String[])
 
 
 
@@ -346,6 +347,47 @@ function setfastdaq!(dev::Initium, actx=1)
 end
 
 """
+`addpressports(dev, plst; channames="P")`
+
+Add pressure port defined by `plst`. See [`PortRange`](@ref) and 
+[`portlist`](@ref) to see how `plst` is defined. 
+
+To give specific names to the pressure ports, use argument `channames`:
+ * String or symbol: The string will be preppended to the channel number
+ * Vector: specific names to each pressure channel.
+
+"""
+function addpressports(dev, plst::AbstractVector{PortRange}; channames="P")
+
+    chans = defscanlist(scanners(dev), plst)
+    # Check if there are ports in plst previously added:
+    if length(intersect(chans, dev.chans.channels)) > 0
+        throw(ArgumentError("Some ports have already been added!"))
+    end
+    
+    SD3(dev, dev.stbl, plst)
+
+    # Get channels names and numbers
+    if isa(channames, AbstractString) || isa(channames, Symbol)
+        chs = string.(channames, chans)
+    elseif isa(channames, AbstractVector)
+        length(chans) != length(channames) && throw(ArgumentError("If `channames` is a vector it should have the length of the number of channels"))
+        chs = string.(channames)
+    else
+        throw(ArgumentError("`channames` should be either a string, a symbol or a vector"))
+    end
+
+    # Add the new channels to dev.chans
+    dev.chans.nchans += length(chans)
+    append!(dev.chans.plst, plst)
+    append!(dev.chans.channels, chans)
+    append!(dev.chans.channames, chs)
+    
+    dev.haschans = true
+    
+end
+
+"""
 `addallpressports(dev)`
 
 Use every available pressure port when acquiring data. This is a convenience function
@@ -353,7 +395,6 @@ that can be used instead of [`daqaddinput`](@ref)  if every available pressure p
 should be acquired. 
 """
 function addallpressports(dev)
-    stbl = dev.stbl
     
     plst = PortRange[]
 
@@ -362,10 +403,7 @@ function addallpressports(dev)
         p2 = s*100 + n
         push!(plst, PortRange(p1,p2,true))
     end
-    SD3(dev, stbl, plst)
-
-    chans = defscanlist(dev.scanners, plst)
-    dev.chans = DTCChannels(length(chans), plst, chans)
+    addpressports(dev, plst; channames="P")
 end
 
     

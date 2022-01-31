@@ -22,10 +22,10 @@ julia> numchannels(dev)
 12
 ```
 """
-function AbstractDAQs.daqaddinput(dev::Initium, ports...)
+function AbstractDAQs.daqaddinput(dev::Initium, ports...; channames="P")
     stbl = dev.stbl
     plst = portlist(ports...)
-    SD3(dev, stbl, plst)
+    addpressports(dev, plst; channames=channames)
 end
 
 
@@ -67,6 +67,11 @@ function AbstractDAQs.daqconfigdev(dev::Initium; kw...)
     stbl = dev.stbl
     
     k = keys(kw)
+
+    if :actx ∈ k
+        
+    end
+    
     p = dev.params
     if :nfr ∈ k
         nfr = kw[:nfr]
@@ -404,7 +409,7 @@ AbstractDAQs.numchannels(dev::Initium) = dev.chans.nchans
 """
 
 """
-AbstractDAQs.daqchannels(dev::Initium) = dev.chans.channels
+AbstractDAQs.daqchannels(dev::Initium) = dev.chans.channames
 
 
 function AbstractDAQs.daqzero(dev::Initium; lrn=1, time=15)
