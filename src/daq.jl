@@ -248,6 +248,7 @@ function readscanner!(dev)
     #if ptype == 4 || ptype == 128  # Confirmation or error
     stopped = false
     i = 1
+    ok = true
     while true
         # Test if daq is non continuous and we have already read nsamples
         i += 1
@@ -258,6 +259,7 @@ function readscanner!(dev)
         # Check if we should stop reading
         if tsk.stop
             stopped = true
+            ok = false
             break
         end
         
@@ -271,6 +273,7 @@ function readscanner!(dev)
             # We don't need to store this packet!
             pop!(buf)
             stopped = false
+            ok = false
             break
         end
         tsk.nread += 1
@@ -292,7 +295,7 @@ function readscanner!(dev)
             end
         end
         
-    else
+    elseif ok
         sleep(0.1)
         b = readresponse(io)
     end
