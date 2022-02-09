@@ -43,6 +43,7 @@ DTCChannels() = DTCChannels(0, PortRange[], Int[], String[])
 
 
 mutable struct Initium <: AbstractPressureScanner
+    devname::String
     "IP address of the device"
     ipaddr::IPv4
     "TCP/IP port, 8400"
@@ -206,7 +207,7 @@ function Initium(devname::String, ip::String; stbl=1, crs="111")
         conf = DAQConfig(ipars, fpars, spars ;devname=devname,
                          model="DTCInitium", sn="", tag="", ip=ip)
         
-        dev = Initium(ip1, port, sock, crs, Tuple{Int,Int,Int}[], stbl, 1, tsk,
+        dev = Initium(devname, ip1, port, sock, crs, Tuple{Int,Int,Int}[], stbl, 1, tsk,
                       CircMatBuffer{UInt8}(), Dict{Symbol,Int}(),
                       DTCChannels(), conf, Dict{Int,Initium}(), false, false)
         dev.stbldev[stbl] = dev
@@ -271,7 +272,7 @@ function Initium(devname::String, dev::Initium, stbl::Int)
     conf.ipars["stbl"] = stbl
     conf.ipars["actx"] = dev.actx
     
-    newdev = Initium(dev.ipaddr, dev.port, dev.sock, dev.crs,
+    newdev = Initium(devname, dev.ipaddr, dev.port, dev.sock, dev.crs,
                      dev.scanners, stbl, dev.actx, dev.task,
                      dev.buffer, Dict{Symbol,Int}(), DTCChannels(),
                      conf, dev.stbldev, false, false)
