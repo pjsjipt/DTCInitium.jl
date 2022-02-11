@@ -43,11 +43,12 @@ DTCChannels() = DTCChannels(0, PortRange[], Int[], String[])
 
 
 mutable struct Initium <: AbstractPressureScanner
-    devname::String
     "IP address of the device"
     ipaddr::IPv4
     "TCP/IP port, 8400"
     port::Int32
+    "Device name"
+    devname::String
     "Socket used to communicate with Initium"
     sock::TCPSocket
     "Cluster/Rack/slot"
@@ -197,7 +198,7 @@ function Initium(devname::String, ip::String; stbl=1, crs="111")
     ip1 = IPv4(ip)
     port = 8400
     sock = opensock(ip1, port)
-    
+
     try
         tsk = DAQTask()
 
@@ -207,9 +208,14 @@ function Initium(devname::String, ip::String; stbl=1, crs="111")
         conf = DAQConfig(ipars, fpars, spars ;devname=devname,
                          model="DTCInitium", sn="", tag="", ip=ip)
         
-        dev = Initium(devname, ip1, port, sock, crs, Tuple{Int,Int,Int}[], stbl, 1, tsk,
-                      CircMatBuffer{UInt8}(), Dict{Symbol,Int}(),
-                      DTCChannels(), conf, Dict{Int,Initium}(), false, false)
+        scanners = Tuple{Int,Int,Int}[]
+        buffer = CircMatBuffer{UInt8}()
+        params = Dict{Symbol,Int}()
+        chans = DTCChannels()
+        stbldev = Dict{Int,Initium}()
+        
+        dev = Initium(ip1, port, devname, sock, crs, scanners, stbl, 1, tsk,
+                      buffer, params, chans, conf, stbldev, false, false)
         dev.stbldev[stbl] = dev
         return dev
     catch e
@@ -272,7 +278,7 @@ function Initium(devname::String, dev::Initium, stbl::Int)
     conf.ipars["stbl"] = stbl
     conf.ipars["actx"] = dev.actx
     
-    newdev = Initium(devname, dev.ipaddr, dev.port, dev.sock, dev.crs,
+    newdev = Initium(dev.ipaddr, dev.port, devname, dev.sock, dev.crs,
                      dev.scanners, stbl, dev.actx, dev.task,
                      dev.buffer, Dict{Symbol,Int}(), DTCChannels(),
                      conf, dev.stbldev, false, false)
@@ -284,7 +290,7 @@ end
 
 function Base.show(io::IO, dev::Initium)
     println(io, "DTC Initium")
-    println(io, "    Dev Name: $(daqdevname(dev))")
+    println(io, "    Dev Name: $(devname(dev))")
     println(io, "    IP: $(string(dev.ipaddr))")
     println(io, "    stbl: $(dev.stbl)")
     println(io, "    Scanners:")

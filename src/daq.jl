@@ -69,7 +69,9 @@ function AbstractDAQs.daqconfigdev(dev::Initium; kw...)
     k = keys(kw)
 
     if :actx ∈ k
-        
+        actx = kw[:actx]
+        actx < 0 && throw(DomainError(actx, "actx ≥ 0"))
+        setfastdaq!(dev, actx)
     end
     
     p = dev.params
@@ -380,9 +382,9 @@ function AbstractDAQs.daqread(dev::Initium)
     end
 
     # Wait for the task to end (if it was started
-    if !istaskdone(dev.task.task) && istaskstarted(dev.task.task)
+    #if !istaskdone(dev.task.task) && istaskstarted(dev.task.task)
         wait(dev.task.task)
-    end
+    #end
     
     # Read the pressure and the sampling frequency
     fs = samplingrate(dev.task)
