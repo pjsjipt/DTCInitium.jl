@@ -354,17 +354,17 @@ function setfastdaq!(dev::Initium, actx=1)
 end
 
 """
-`addpressports(dev, plst; channames="P")`
+`addpressports(dev, plst; names="P")`
 
 Add pressure port defined by `plst`. See [`PortRange`](@ref) and 
 [`portlist`](@ref) to see how `plst` is defined. 
 
-To give specific names to the pressure ports, use argument `channames`:
+To give specific names to the pressure ports, use argument `names`:
  * String or symbol: The string will be preppended to the channel number
  * Vector: specific names to each pressure channel.
 
 """
-function addpressports(dev, plst::AbstractVector{PortRange}; channames="P")
+function addpressports(dev, plst::AbstractVector{PortRange}; names="P")
 
     chans = defscanlist(scanners(dev), plst)
     # Check if there are ports in plst previously added:
@@ -375,13 +375,13 @@ function addpressports(dev, plst::AbstractVector{PortRange}; channames="P")
     SD3(dev, dev.stbl, plst)
 
     # Get channels names and numbers
-    if isa(channames, AbstractString) || isa(channames, Symbol)
-        chs = string.(channames, chans)
-    elseif isa(channames, AbstractVector)
-        length(chans) != length(channames) && throw(ArgumentError("If `channames` is a vector it should have the length of the number of channels"))
-        chs = string.(channames)
+    if isa(names, AbstractString) || isa(names, Symbol)
+        chs = string.(names, chans)
+    elseif isa(names, AbstractVector)
+        length(chans) != length(names) && throw(ArgumentError("If `names` is a vector it should have the length of the number of channels"))
+        chs = string.(names)
     else
-        throw(ArgumentError("`channames` should be either a string, a symbol or a vector"))
+        throw(ArgumentError("`names` should be either a string, a symbol or a vector"))
     end
 
     # Add the new channels to dev.chans
@@ -410,7 +410,7 @@ function addallpressports(dev)
         p2 = s*100 + n
         push!(plst, PortRange(p1,p2,true))
     end
-    addpressports(dev, plst; channames="P")
+    addpressports(dev, plst; names="P")
 end
 
     

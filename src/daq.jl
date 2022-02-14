@@ -22,10 +22,10 @@ julia> numchannels(dev)
 12
 ```
 """
-function AbstractDAQs.daqaddinput(dev::Initium, ports...; channames="P")
+function AbstractDAQs.daqaddinput(dev::Initium, ports...; names="P")
     stbl = dev.stbl
     plst = portlist(ports...)
-    addpressports(dev, plst; channames=channames)
+    addpressports(dev, plst; channames=names)
 end
 
 
