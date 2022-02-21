@@ -75,6 +75,7 @@ mutable struct Initium <: AbstractPressureScanner
     haschans::Bool
     "Has data acquisition been configured?"
     isconfigured::Bool
+    usethread::Bool
 end
 
 
@@ -189,7 +190,7 @@ julia> numchannels(dev1)
 
 Now we will create another device for anothe
 """
-function Initium(devname::String, ip::String; stbl=1, crs="111")
+function Initium(devname::String, ip::String; stbl=1, crs="111", usethread=true)
 
     if !(1 ≤ stbl ≤ 5)
         error("DA Setup table (`stbl`) should be 1-5!")
@@ -215,7 +216,8 @@ function Initium(devname::String, ip::String; stbl=1, crs="111")
         stbldev = Dict{Int,Initium}()
         
         dev = Initium(ip1, port, devname, sock, crs, scanners, stbl, 1, tsk,
-                      buffer, params, chans, conf, stbldev, false, false)
+                      buffer, params, chans, conf, stbldev,
+                      false, false, usethread)
         dev.stbldev[stbl] = dev
         return dev
     catch e
@@ -227,7 +229,7 @@ end
 
 function Initium(devname::String, scanners...; stbl=1, 
                  ip="192.168.129.7", crs="111", npp=64, lrn=1,
-                 bufsize=65_000, addallports=true)
+                 bufsize=65_000, addallports=true, usethread=true)
 
     if !(1 ≤ stbl ≤ 5)
         error("DA Setup table (`stbl`) should be 1-5!")
@@ -236,7 +238,8 @@ function Initium(devname::String, scanners...; stbl=1,
     sock = TCPSocket()
     
     try
-        dev = Initium(devname, ip; crs=crs, stbl=stbl)
+        dev = Initium(devname, ip; crs=crs, stbl=stbl,
+                      usethread=usethread)
         sock = socket(dev)
         addscanners(dev, scanners...; npp=npp, lrn=lrn)
         # Allocate buffer
@@ -281,7 +284,7 @@ function Initium(devname::String, dev::Initium, stbl::Int)
     newdev = Initium(dev.ipaddr, dev.port, devname, dev.sock, dev.crs,
                      dev.scanners, stbl, dev.actx, dev.task,
                      dev.buffer, Dict{Symbol,Int}(), DTCChannels(),
-                     conf, dev.stbldev, false, false)
+                     conf, dev.stbldev, false, false, dev.usethread)
     dev.stbldev[stbl] = newdev
     # Get a default configuration
     SD2(newdev, stbl=stbl)

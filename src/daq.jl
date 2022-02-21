@@ -354,7 +354,7 @@ function AbstractDAQs.daqacquire(dev::Initium)
     return P, fs
 end
 
-function AbstractDAQs.daqstart(dev::Initium, usethread=false)
+function AbstractDAQs.daqstart(dev::Initium)
     stbl = dev.stbl
     numchannels(dev) == 0 && error("No channels configured for stbl=$stbl!")
     
@@ -362,7 +362,7 @@ function AbstractDAQs.daqstart(dev::Initium, usethread=false)
         error("DTC Initium already reading!")
     end
 
-    if usethread
+    if dev.usethread
         tsk = Threads.@spawn readscanner!(dev)
     else
         tsk = @async readscanner!(dev)
