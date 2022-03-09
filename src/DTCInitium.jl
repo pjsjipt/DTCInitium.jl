@@ -12,7 +12,7 @@ export daqaddinput, daqconfig, daqacquire, daqconfig, daqconfigdev
 export daqstart, daqread, daqstop, daqzero
 export daqchannels, numchannels, samplesread, isreading
 export dtcsetstbl!, setfastdaq!
-
+export devname, devtype
 export DAQTask
 
 
