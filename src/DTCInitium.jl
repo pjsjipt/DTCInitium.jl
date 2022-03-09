@@ -77,6 +77,7 @@ mutable struct Initium <: AbstractPressureScanner
     "Has data acquisition been configured?"
     isconfigured::Bool
     usethread::Bool
+    unit::Int
 end
 
 
@@ -218,7 +219,7 @@ function Initium(devname::String, ip::String; stbl=1, crs="111", usethread=true)
         
         dev = Initium(ip1, port, devname, sock, crs, scanners, stbl, 1, tsk,
                       buffer, params, chans, conf, stbldev,
-                      false, false, usethread)
+                      false, false, usethread, 3)
         dev.stbldev[stbl] = dev
         return dev
     catch e
@@ -230,7 +231,7 @@ end
 
 function Initium(devname::String, scanners...; stbl=1, 
                  ip="192.168.129.7", crs="111", npp=64, lrn=1,
-                 bufsize=65_000, addallports=true, usethread=true)
+                 bufsize=65_000, addallports=true, usethread=true, unit=3)
 
     if !(1 ≤ stbl ≤ 5)
         error("DA Setup table (`stbl`) should be 1-5!")
@@ -242,7 +243,7 @@ function Initium(devname::String, scanners...; stbl=1,
         dev = Initium(devname, ip; crs=crs, stbl=stbl,
                       usethread=usethread)
         sock = socket(dev)
-        addscanners(dev, scanners...; npp=npp, lrn=lrn)
+        addscanners(dev, scanners...; npp=npp, lrn=lrn, unit=unit)
         # Allocate buffer
         nchans = availablechans(dev)
         w = 24 + nchans*4  # Maximum number of bytes per frame
@@ -285,7 +286,7 @@ function Initium(devname::String, dev::Initium, stbl::Int)
     newdev = Initium(dev.ipaddr, dev.port, devname, dev.sock, dev.crs,
                      dev.scanners, stbl, dev.actx, dev.task,
                      dev.buffer, Dict{Symbol,Int}(), DTCChannels(),
-                     conf, dev.stbldev, false, false, dev.usethread)
+                     conf, dev.stbldev, false, false, dev.usethread, dev.unit)
     dev.stbldev[stbl] = newdev
     # Get a default configuration
     SD2(newdev, stbl=stbl)
@@ -395,7 +396,7 @@ function addpressports(dev, plst::AbstractVector{PortRange}; names="P")
     dev.chans.channels = chans
     dev.chans.channames = chs
     for i in 1:nch
-        chname = dev.channames[i]
+        chname = chs[i]
         dev.chans.chanidx[chname] = i
     end
     
@@ -498,7 +499,7 @@ DTC Initium
 
 
 """
-function addscanners(dev::Initium, lst...; npp=64, lrn=1)
+function addscanners(dev::Initium, lst...; npp=64, lrn=1, unit=3)
     
     scnlst = scannerlist(lst...; npp=npp, lrn=lrn)
 
@@ -510,11 +511,16 @@ function addscanners(dev::Initium, lst...; npp=64, lrn=1)
         nchans = availablechans(scnlst)
         w = 24 + nchans*4  # Maximum number of bytes per frame
         dev.buffer.width = w
-
-        # Set the default unit to Pascal (3)
-        for lrn in unique([s[3] for s in scnlst])  
-            PC4(dev, 3, 0, lrn=lrn)
+        if unit < 1 || unit > 12
+            unit = 3 # Pa
         end
+        
+        # Set the default unit to Pascal (3)
+        
+        for lrn in unique([s[3] for s in scnlst])  
+            PC4(dev, unit, 0, lrn=lrn)
+        end
+        dev.unit=unit
         
     catch e
         if isa(e, DTCInitiumError)

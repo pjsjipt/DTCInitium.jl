@@ -342,7 +342,7 @@ end
 AbstractDAQs.isreading(dev::Initium) = dev.task.isreading
 AbstractDAQs.samplesread(dev::Initium) = dev.task.nread
 
-
+export meastime, measdata, measinfo, samplingrate
 function AbstractDAQs.daqacquire(dev::Initium)
     stbl = dev.stbl
     numchannels(dev) == 0 && error("No channels configured for stbl=$stbl!")
@@ -351,7 +351,9 @@ function AbstractDAQs.daqacquire(dev::Initium)
     fs = samplingrate(dev.task)
     P = readpressure(dev)
     t = dev.task.time
-    return P, fs, t
+    
+    return MeasData{Matrix{Float32},Int}(devname(dev), devtype(dev),
+                                         t, fs, P, dev.unit, dev.chans.chanidx)
 end
 
 function AbstractDAQs.daqstart(dev::Initium)
@@ -389,8 +391,10 @@ function AbstractDAQs.daqread(dev::Initium)
     # Read the pressure and the sampling frequency
     fs = samplingrate(dev.task)
     P = readpressure(dev)
+    t = dev.task.time
 
-    return P, fs
+    return MeasData{Matrix{Float32},Int}(devname(dev), devtype(dev),
+                                         t, fs, P, dev.unit, dev.chans.chanidx)
 end
 
 function AbstractDAQs.daqstop(dev::Initium)
