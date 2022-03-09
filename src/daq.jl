@@ -1,4 +1,4 @@
-
+using Dates
 """
 `daqaddinput(dev::Initium, ports...)`
 
@@ -232,7 +232,7 @@ function readscanner!(dev)
     empty!(buf)
     
     tsk.isreading = true
-
+    tsk.time = now()
     cmd = AD2cmd(stbl)
     println(io, cmd)
 
@@ -350,8 +350,8 @@ function AbstractDAQs.daqacquire(dev::Initium)
     readscanner!(dev)
     fs = samplingrate(dev.task)
     P = readpressure(dev)
-
-    return P, fs
+    t = dev.task.time
+    return P, fs, t
 end
 
 function AbstractDAQs.daqstart(dev::Initium)

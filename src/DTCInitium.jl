@@ -27,6 +27,7 @@ mutable struct DTCChannels
     "Channels availables"
     channels::Vector{Int}
     channames::Vector{String}
+    chanidx::Dict{String,Int}
 end
 
 """
@@ -38,7 +39,7 @@ The ports available in the DTC Initium can be specified as range or
 a sequence of ranges. Check command SD3 in the user's manual. 
 
 """
-DTCChannels() = DTCChannels(0, PortRange[], Int[], String[])
+DTCChannels() = DTCChannels(0, PortRange[], Int[], String[], Dict{String,Int}())
 
 
 
@@ -388,10 +389,15 @@ function addpressports(dev, plst::AbstractVector{PortRange}; names="P")
     end
 
     # Add the new channels to dev.chans
-    dev.chans.nchans += length(chans)
-    append!(dev.chans.plst, plst)
-    append!(dev.chans.channels, chans)
-    append!(dev.chans.channames, chs)
+    nch = length(chans)
+    dev.chans.nchans = length(chans)
+    dev.chans.plst =  plst
+    dev.chans.channels = chans
+    dev.chans.channames = chs
+    for i in 1:nch
+        chname = dev.channames[i]
+        dev.chans.chanidx[chname] = i
+    end
     
     dev.haschans = true
     
