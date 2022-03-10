@@ -1,5 +1,7 @@
 
-
+"""
+Error codes defined by DTC Initium. 
+"""
 const errorcodes = Dict(-3 =>"Illegal Command ID", 
                         -5 =>"Parameter Is Missing", 
                         -6 =>"Value Too Low", 
@@ -25,11 +27,23 @@ const errorcodes = Dict(-3 =>"Illegal Command ID",
                         -82=>"Data Acquisition Aborted", 
                         -230=>"Module Not Ready")
 
+
 struct DTCInitiumError <: Exception
+    "Code of the error"
     val::Int
+    "Error message"
     msg::String
 end
 
+"""
+`DTCInitiumError(val::Integer)`
+
+Creates an exception with an error code and corresponding message. 
+
+Not all errors are documented. In this case the message is "Unknown Error".
+
+
+"""
 DTCInitiumError(msg::String) = DTCInitiumError(0, msg)
 function DTCInitiumError(val::Integer)
     if haskey(errorcodes, val)

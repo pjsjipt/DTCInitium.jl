@@ -26,7 +26,9 @@ mutable struct DTCChannels
     plst::Vector{PortRange}
     "Channels availables"
     channels::Vector{Int}
+    "Names of each channel (pressure port)"
     channames::Vector{String}
+    "Maps a channel name to the index of the pressure port"
     chanidx::Dict{String,Int}
 end
 
@@ -111,7 +113,7 @@ can be useful and a "sub-device" can be created for another DA setup table
  * `bufsize` Length of buffer that can store pressure data
  * `addallports` Boolean that specifies if all available pressure ports should be added to the device
  * `scanners` Scanners connected to the system. See method [`addscanners`](@ref) for detailed information on the format used. But if integers or integer ranges are used, parameters `npp` and `lrn` are used as default values.
-
+ * `unit` Index of the unit to be used for pressure. See manual. 3 is for Pascal.
 ## Examples
 
 Basic low level example:

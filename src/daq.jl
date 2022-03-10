@@ -1,12 +1,18 @@
 using Dates
 """
-`daqaddinput(dev::Initium, ports...)`
+`daqaddinput(dev::Initium, ports...; names="P")`
 
-Add channels to the Initium.
+Add channels to the [`Initium`](@ref).
 
 After adding scanners, the channels that should be acquired must be specified. 
-The ports can be specified as ranges, or individual channels. See [`portlist`](@ref) 
-for mor information
+The ports can be specified as ranges, or individual channels. See [`portlist`](@ref).
+
+The pressure ports have, each, string names that can be specified with the `names`
+keyword argument. If `names` is a single string, it will append this string to the
+beginning of the port number. The other option is to provide exact names for each 
+pressure port.
+
+For more information see [`addpressports`](@ref). 
 
 
 ## Examples
@@ -25,7 +31,7 @@ julia> numchannels(dev)
 function AbstractDAQs.daqaddinput(dev::Initium, ports...; names="P")
     stbl = dev.stbl
     plst = portlist(ports...)
-    addpressports(dev, plst; channames=names)
+    addpressports(dev, plst; names=names)
 end
 
 
@@ -127,7 +133,18 @@ function AbstractDAQs.daqconfigdev(dev::Initium; kw...)
 end
 
             
-    
+"""
+`daqconfig(dev::Initium; kw...)`
+
+Configures the DTC Initium data acquisition parameters such as sampling rate (or period)
+and number of samples (or total sampling time).
+
+**This function is not recommended** since for fast data acquisition, the sampling rate
+depends on the number of channels and other parameters. This is still an ongoing work.
+
+PLEASE USE THE FUNCTION [`daqconfigdev`](@ref) and check the manual if in doubt.
+
+"""    
 function AbstractDAQs.daqconfig(dev::Initium; kw...)
     stbl = dev.stbl
 
@@ -181,6 +198,14 @@ function AbstractDAQs.daqconfig(dev::Initium; kw...)
 
 end
 
+"""
+`readresponse!(io, buf)`
+
+Reads a response into a buffer.
+
+It first reads the 8 byte response and then, if necessary, reads the rest of the response.
+The buffer should be large enough!
+"""
 function readresponse!(io, buf)
 
     readbytes!(io, buf, 8)
@@ -339,10 +364,19 @@ function readpressure(dev)
     
 end
 
+"Is the DTC Initium reading data?"
 AbstractDAQs.isreading(dev::Initium) = dev.task.isreading
+"How many samples has the DTC Initium read?"
 AbstractDAQs.samplesread(dev::Initium) = dev.task.nread
 
 export meastime, measdata, measinfo, samplingrate
+
+"""
+`daqacquire(dev::Initium)`
+
+Acquire data synchronously from the DTC Initium using the present configurations.
+
+"""
 function AbstractDAQs.daqacquire(dev::Initium)
     stbl = dev.stbl
     numchannels(dev) == 0 && error("No channels configured for stbl=$stbl!")
@@ -356,6 +390,15 @@ function AbstractDAQs.daqacquire(dev::Initium)
                                          t, fs, P, dev.unit, dev.chans.chanidx)
 end
 
+"""
+`daqstart(dev::Initium)`
+
+Start asynchronous data acquisition. If the [`Initium`](@ref) object was created with
+`usethread == true`, a thread (using `@spawn`) will be used to carry out the data 
+acquisition. Otherwise, green threads are used (`@async`). 
+
+Remember: to use threads, julia should be started with the appropriate options.
+"""
 function AbstractDAQs.daqstart(dev::Initium)
     stbl = dev.stbl
     numchannels(dev) == 0 && error("No channels configured for stbl=$stbl!")
@@ -374,6 +417,15 @@ function AbstractDAQs.daqstart(dev::Initium)
     return tsk
 end
 
+"""
+`daqread(dev::Initium)`
+
+Read data from DTC Initium. If batch acquisition is used, this function will block and
+wait for data acquisition job to end. If continuous data acquisition is used, the function
+will stop the data acquisition before reading what has been acquired.
+
+In the future, the function `daqpeek` will be implemented that can read some of the available data without interrupting the data acquisition.
+"""
 function AbstractDAQs.daqread(dev::Initium)
     stbl = dev.stbl
 
@@ -397,6 +449,12 @@ function AbstractDAQs.daqread(dev::Initium)
                                          t, fs, P, dev.unit, dev.chans.chanidx)
 end
 
+
+"""
+`daqstop(dev::Initium)`
+
+Stop asynchronous data acquisition.
+"""
 function AbstractDAQs.daqstop(dev::Initium)
     tsk = dev.task
     # If DTC is scanning, we need to stop it
@@ -409,15 +467,13 @@ function AbstractDAQs.daqstop(dev::Initium)
     dev.task.isreading = false
 end
 
-
+"Returns the number of channels available"
 AbstractDAQs.numchannels(dev::Initium) = dev.chans.nchans
     
-"""
-
-"""
+"Returns the names of the channels available"
 AbstractDAQs.daqchannels(dev::Initium) = dev.chans.channames
 
-
+"Perform a zero calibration"
 function AbstractDAQs.daqzero(dev::Initium; lrn=1, time=15)
     CA2(dev; lrn=lrn)
     sleep(time)

@@ -349,24 +349,6 @@ end
 Reads a response from the DTC Initium. It is capable of reading any type of response.
 It will just return the bytes acquired, no processing or parsing is done.
 """
-function genericesponse(io)
-
-    b1 = read(io, 8)
-    plen = resplen(b1)
-
-    if b1[2] == 4 || b1[2] == 128
-        return respconf(b1)
-    elseif b1[2] == 8
-        return respsinglevali(b1)
-    elseif b1[2] == 9
-        return respsinglevalf(b1)
-    elseif ispackstreamdata(b1)
-        
-    end
-    
-        
-end
-
 function readresponse(io)
     # Read header
     hdr = read(io, 8)

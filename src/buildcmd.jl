@@ -66,6 +66,13 @@ function scannerlist(lst...; npp=64, lrn=1)
 end
 
 
+"""
+`availablechans(scnlst)`
+`availablechans(scnlst...)`
+
+Return the number of available channels in scanner list.
+
+"""
 availablechans(scnlst) = sum(s[2] for s in scnlst)
 availablechans(scnlst...) = sum(s[2] for s in scnlst...)
 
@@ -335,11 +342,13 @@ Creates command String to perform zero pressure calibration.
 """
 CA2cmd(lrn=1) = "CA2 $lrn;"
 
-
+"Create OP2 - output DA setup table's coefficients - command"
 OP2cmd(stbl, ports; crs="111") = "OP2 $crs $(-stbl) $ports;"
 
+"Create OP3 - output DA setup table's coefficients (all) - command"
 OP3cmd(stbl, ports; crs="111") = "OP3 $crs $stbl $ports;"
 
+"Create OP5 - output scan list of setup table - command"
 OP5cmd(stbl; crs="111") = "OP5 $crs $stbl;"
 
 """
@@ -376,13 +385,18 @@ function AD2cmd(stbl)
 
 end
 
-
+"Create LA1 - Look at scanner status - command"
 LA1cmd(port; crs="111") = "LA1 $crs $port;"
 
+"Create LA4 - Look at Firmware version - command"
 LA4cmd(;crs="111") = "LA4 $crs;"
 
     
+"""
+`sendcommand!(io, cmd, buf, nbytes)`
 
+Sends a command to socket.
+"""
 function sendcommand!(io, cmd, buf, nbytes)
     println(io, cmd)
     readbytes!(io, buf, nbytes)
