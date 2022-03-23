@@ -255,25 +255,30 @@ function readscanner!(dev)
     
     cleartask!(tsk)
     empty!(buf)
-    
+
     tsk.isreading = true
     tsk.time = now()
     cmd = AD2cmd(stbl)
     println(io, cmd)
-
+    
     t0 = time_ns()
-
+    t1 = t0
     b = nextbuffer(buf)
-    ptype = readresponse!(io, b)
-    t1 = time_ns()
-    settiming!(tsk, t0, t1, 1)
-    # Check to see if everything went well
-    rtype = resptype(b)
-    if rtype==4 || rtype == 128 || tsk.stop
-        tsk.isreading = false
-        cleartask!(tsk)
-        return
+    try
+        ptype = readresponse!(io, b)
+        t1 = time_ns()
+        settiming!(tsk, t0, t1, 1)
+        # Check to see if everything went well
+        rtype = resptype(b)
+        if rtype==4 || rtype == 128 || tsk.stop
+            tsk.isreading = false
+            cleartask!(tsk)
+            return
+        end
+    catch e
+        throw(e)
     end
+    
     
     tsk.nread += 1
     tn = t1
@@ -281,36 +286,50 @@ function readscanner!(dev)
     stopped = false
     i = 1
     ok = true
+    exthrown = false  # No exception (Ctrl-C) thrown!
     while true
         # Test if daq is non continuous and we have already read nsamples
-        i += 1
-        if (nsamples > 0 && i > nsamples)
-            break
-        end
-
-        # Check if we should stop reading
-        if tsk.stop
-            stopped = true
-            ok = false
-            break
+        try
+            i += 1
+            if (nsamples > 0 && i > nsamples)
+                break
+            end
+            
+            # Check if we should stop reading
+            if tsk.stop
+                stopped = true
+                ok = false
+                break
+            end
+            
+            # Read packet
+            b = nextbuffer(buf) 
+            ptype = readresponse!(io, b)
+            tn = time_ns()
+            rtype = resptype(b)
+            # Is packet error or confirmation - daq has ended
+            if rtype==4 || rtype == 128 
+                # We don't need to store this packet!
+                pop!(buf)
+                stopped = false
+                ok = false
+                break
+            end
+            tsk.nread += 1
+            # Set timing stuff
+            settiming!(tsk, t1, tn, i-1)
+        catch e
+            if isa(e, InterruptException)
+                # Ctrl-C captured!
+                # We want to stop the data acquisition safely and rethrow it
+                AD0(dev) # Send stop command
+                tsk.stop = true # Next iteration we treat this as a stop command
+                exthrown = true # But we will let the code know that Ctrl-C was pressed
+            else
+                throw(e) # Some other error. Let someone else handle it
+            end
         end
         
-        # Read packet
-        b = nextbuffer(buf) 
-        ptype = readresponse!(io, b)
-        tn = time_ns()
-        rtype = resptype(b)
-        # Is packet error or confirmation - daq has ended
-        if rtype==4 || rtype == 128 
-            # We don't need to store this packet!
-            pop!(buf)
-            stopped = false
-            ok = false
-            break
-        end
-        tsk.nread += 1
-        # Set timing stuff
-        settiming!(tsk, t1, tn, i-1)
     end
 
     tsk.isreading = false
@@ -318,6 +337,7 @@ function readscanner!(dev)
     if stopped
         # Got here without the break. Normal operation. 
         # Read the end buffer
+        sleep(0.5)
         while true
             sleep(0.5)
             b = readresponse(io)
@@ -326,9 +346,11 @@ function readscanner!(dev)
                 break
             end
         end
-        
+        if exthrown  # Ctrl-C was pressed
+            throw(InterruptException)
+        end
     elseif ok
-        sleep(0.1)
+        sleep(0.5)
         b = readresponse(io)
     end
     
@@ -380,7 +402,6 @@ Acquire data synchronously from the DTC Initium using the present configurations
 function AbstractDAQs.daqacquire(dev::Initium)
     stbl = dev.stbl
     numchannels(dev) == 0 && error("No channels configured for stbl=$stbl!")
-
     readscanner!(dev)
     fs = samplingrate(dev.task)
     P = readpressure(dev)
@@ -479,4 +500,16 @@ function AbstractDAQs.daqzero(dev::Initium; lrn=1, time=15)
     sleep(time)
 end
 
+
+
+function reconnect(dev::Initium)
+    close(dev.sock)
+
+    sleep(11) # Initium requires this waiting period before reconnecting
+
+    sock = opensock(dev.ipaddr, dev.port)
+
+    # Add the scanners
     
+end
+
