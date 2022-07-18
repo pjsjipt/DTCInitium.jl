@@ -2,7 +2,7 @@ module DTCInitium
 
 using Sockets
 using AbstractDAQs
-
+import DataStructures: OrderedDict
 
 export Initium, SD1, SD2, SD3, SD5, PC4, CA2, AD0, AD2, socket
 export readresponse, readresponse!
@@ -29,7 +29,7 @@ mutable struct DTCChannels
     "Names of each channel (pressure port)"
     channames::Vector{String}
     "Maps a channel name to the index of the pressure port"
-    chanidx::Dict{String,Int}
+    chanidx::OrderedDict{String,Int}
 end
 
 """
@@ -41,7 +41,7 @@ The ports available in the DTC Initium can be specified as range or
 a sequence of ranges. Check command SD3 in the user's manual. 
 
 """
-DTCChannels() = DTCChannels(0, PortRange[], Int[], String[], Dict{String,Int}())
+DTCChannels() = DTCChannels(0, PortRange[], Int[], String[], OrderedDict{String,Int}())
 
 
 
