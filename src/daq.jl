@@ -28,7 +28,7 @@ julia> numchannels(dev)
 12
 ```
 """
-function AbstractDAQs.daqaddinput(dev::Initium, ports...; names="P")
+function DAQCore.daqaddinput(dev::Initium, ports...; names="P")
     stbl = dev.stbl
     plst = portlist(ports...)
     addpressports(dev, plst; names=names)
@@ -69,7 +69,7 @@ julia> daqconfigdev(dev, nfr=1, nms=10, msd=20) # Acquire 10 points every 20 ms
 julia> daqconfigdev(dev, nfr=10, nms=10, msd=200) # Acquire 10 points every 200 ms. Average 10 pressure measurements before outputing data
 ```
 """
-function AbstractDAQs.daqconfigdev(dev::Initium; kw...)
+function DAQCore.daqconfigdev(dev::Initium; kw...)
     stbl = dev.stbl
     
     k = keys(kw)
@@ -145,7 +145,7 @@ depends on the number of channels and other parameters. This is still an ongoing
 PLEASE USE THE FUNCTION [`daqconfigdev`](@ref) and check the manual if in doubt.
 
 """    
-function AbstractDAQs.daqconfig(dev::Initium; kw...)
+function DAQCore.daqconfig(dev::Initium; kw...)
     stbl = dev.stbl
 
     p = dev.params
@@ -387,9 +387,9 @@ function readpressure(dev)
 end
 
 "Is the DTC Initium reading data?"
-AbstractDAQs.isreading(dev::Initium) = dev.task.isreading
+DAQCore.isreading(dev::Initium) = dev.task.isreading
 "How many samples has the DTC Initium read?"
-AbstractDAQs.samplesread(dev::Initium) = dev.task.nread
+DAQCore.samplesread(dev::Initium) = dev.task.nread
 
 export meastime, measdata, measinfo, samplingrate
 
@@ -399,7 +399,7 @@ export meastime, measdata, measinfo, samplingrate
 Acquire data synchronously from the DTC Initium using the present configurations.
 
 """
-function AbstractDAQs.daqacquire(dev::Initium)
+function DAQCore.daqacquire(dev::Initium)
     stbl = dev.stbl
     numchannels(dev) == 0 && error("No channels configured for stbl=$stbl!")
     readscanner!(dev)
@@ -420,7 +420,7 @@ acquisition. Otherwise, green threads are used (`@async`).
 
 Remember: to use threads, julia should be started with the appropriate options.
 """
-function AbstractDAQs.daqstart(dev::Initium)
+function DAQCore.daqstart(dev::Initium)
     stbl = dev.stbl
     numchannels(dev) == 0 && error("No channels configured for stbl=$stbl!")
     
@@ -447,7 +447,7 @@ will stop the data acquisition before reading what has been acquired.
 
 In the future, the function `daqpeek` will be implemented that can read some of the available data without interrupting the data acquisition.
 """
-function AbstractDAQs.daqread(dev::Initium)
+function DAQCore.daqread(dev::Initium)
     stbl = dev.stbl
 
     # If we are doing continuous data acquisition, we first need to stop it
@@ -476,7 +476,7 @@ end
 
 Stop asynchronous data acquisition.
 """
-function AbstractDAQs.daqstop(dev::Initium)
+function DAQCore.daqstop(dev::Initium)
     tsk = dev.task
     # If DTC is scanning, we need to stop it
     if !istaskdone(tsk.task) && istaskstarted(tsk.task)
@@ -489,13 +489,13 @@ function AbstractDAQs.daqstop(dev::Initium)
 end
 
 "Returns the number of channels available"
-AbstractDAQs.numchannels(dev::Initium) = dev.chans.nchans
+DAQCore.numchannels(dev::Initium) = dev.chans.nchans
     
 "Returns the names of the channels available"
-AbstractDAQs.daqchannels(dev::Initium) = dev.chans.channames
+DAQCore.daqchannels(dev::Initium) = dev.chans.channames
 
 "Perform a zero calibration"
-function AbstractDAQs.daqzero(dev::Initium; lrn=1, time=15)
+function DAQCore.daqzero(dev::Initium; lrn=1, time=15)
     CA2(dev; lrn=lrn)
     sleep(time)
 end
@@ -511,5 +511,47 @@ function reconnect(dev::Initium)
 
     # Add the scanners
     
+end
+
+"""
+`daqunits(dev::Initium, unit=3)`
+
+Configure Initium pressure units. The Initium interface allows
+for different scanners to use different units using the LRN, logical
+range number. But this driver specifies that a single unit is used!
+
+## Parameters
+ * `dev`: `Initium` device
+ * `unit`: `Integer` 0-13 specifying the unit. If 0 or 13, use the fctr factor that converts to psi. Else see table below. The default value is 3 and corresponds to Pascal.
+
+## Unit table
+| unx | Unit |   factor  |
+| --- | ---- | --------- |
+| 0   | user |  ?        |
+| 1   | psi  | 1.0       |
+| 2   | inH2O| 27.673    |
+| 3   | Pa   | 6894.757  |   
+| 4   | kG/m2| 703.0696  |
+| 5   | G/cm2| 70.30696  |
+| 6   | ATM  | 0.068046  |
+| 7   | mmHg | 51.71493  |
+| 8   | mmH2O| 703.08    |
+| 9   | bar  | 0.0689475 |
+| 10  | kPa  | 6.894757  |
+| 11  | mBar | 68.94757  |
+| 12  | PSF  | 144.0     |
+| 13  | user |   ?       |
+"""
+function DAQCore.daqunits(dev::Initium, unit=3 lrn=1)
+    
+    (1 ≤ unit ≤ 12) || throw(DomainError(unit, "Unit should be between 1 and 12"))
+    
+    for lrn in unique([s[3] for s in dev.scanners])  
+        PC4(dev, unit, 0, lrn=lrn)
+    end
+
+    iparam!(dev.conf, "unit"=>unit)
+    dev.unit = unit
+    return
 end
 

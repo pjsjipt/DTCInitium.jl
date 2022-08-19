@@ -1,7 +1,7 @@
 module DTCInitium
 
 using Sockets
-using AbstractDAQs
+using DAQCore
 import DataStructures: OrderedDict
 
 export Initium, SD1, SD2, SD3, SD5, PC4, CA2, AD0, AD2, socket
@@ -9,7 +9,7 @@ export readresponse, readresponse!
 export scannerlist, SD1cmd, daqparams, setparams, SD2cmd
 export addscanners
 export daqaddinput, daqconfig, daqacquire, daqconfig, daqconfigdev
-export daqstart, daqread, daqstop, daqzero
+export daqstart, daqread, daqstop, daqzero, daqunits
 export daqchannels, numchannels, samplesread, isreading
 export dtcsetstbl!, setfastdaq!
 export devname, devtype
@@ -17,9 +17,10 @@ export DAQTask
 
 
 
+
 include("ports.jl")
 
-mutable struct DTCChannels
+mutable struct DTCChannels <: AbstractDaqChannels
     "Number of channels"
     nchans::Int
     "List of port ranges"
@@ -44,6 +45,12 @@ a sequence of ranges. Check command SD3 in the user's manual.
 DTCChannels() = DTCChannels(0, PortRange[], Int[], String[], OrderedDict{String,Int}())
 
 
+const UNIT_TABLE = OrderedDict(0=>"user", 1=>"psi", 2=>"inH₂O", 3=>"Pa", 4=>"kg/m²",
+                               5=>"g/cm²", 6=>"atm", 7=>"mmHg", 8=>"mmH₂O",
+                               9=>"bar", 10=>"kPa", 11=>"mbar", 12=>"psf", 13=>"user")
+
+
+
 
 mutable struct Initium <: AbstractPressureScanner
     "IP address of the device"
@@ -63,15 +70,13 @@ mutable struct Initium <: AbstractPressureScanner
     "Intermittency of temp-sets"
     actx::Int
     "DAQ Task handler - stores binary data"
-    task::DAQTask
+    task::DaqTask
     "Buffer to store acquired data"
     buffer::CircMatBuffer{UInt8}
-    "Data acquisition parameters"
-    params::Dict{Symbol,Int}
     "Channels configured"
-    chans::DTCChannels
+    chans::DaqChannels{Vector{Int},String} 
     "Device configuration"
-    conf::DAQConfig
+    conf::DaqConfig
     "Devices with `stbl` configured"
     stbldev::Dict{Int, Initium}
     "Have channels been added to device?"
@@ -194,7 +199,8 @@ julia> numchannels(dev1)
 
 Now we will create another device for anothe
 """
-function Initium(devname::String, ip::String; stbl=1, crs="111", usethread=true)
+function Initium(devname::AbstractString, ip::AbstractString;
+                 stbl=1, crs="111", usethread=true)
 
     if !(1 ≤ stbl ≤ 5)
         error("DA Setup table (`stbl`) should be 1-5!")
@@ -205,22 +211,19 @@ function Initium(devname::String, ip::String; stbl=1, crs="111", usethread=true)
     sock = opensock(ip1, port)
 
     try
-        tsk = DAQTask()
+        tsk = DaqTask()
 
-        ipars = Dict{String,Int}("stbl"=>stbl, "actx"=>1)
-        fpars = Dict{String,Float64}()
-        spars = Dict{String,String}()
-        conf = DAQConfig(ipars, fpars, spars ;devname=devname,
-                         model="DTCInitium", sn="", tag="", ip=ip)
-        
+        conf = DaqConfig(devname, "Initium"; ip=ip, port=port,
+                         model="DTCInitium", sn="", tag="")
+        iparam!(conf, "stbl"=>stbl, "actx"=>1)
         scanners = Tuple{Int,Int,Int}[]
         buffer = CircMatBuffer{UInt8}()
-        params = Dict{Symbol,Int}()
-        chans = DTCChannels()
+        
+        chans = DaqChannels(devname, "Initium", Int[], "Pa", String[])
         stbldev = Dict{Int,Initium}()
         
         dev = Initium(ip1, port, devname, sock, crs, scanners, stbl, 1, tsk,
-                      buffer, params, chans, conf, stbldev,
+                      buffer, chans, conf, stbldev,
                       false, false, usethread, 3)
         dev.stbldev[stbl] = dev
         return dev
@@ -231,8 +234,8 @@ function Initium(devname::String, ip::String; stbl=1, crs="111", usethread=true)
     
 end
 
-function Initium(devname::String, scanners...; stbl=1, 
-                 ip="192.168.129.7", crs="111", npp=64, lrn=1,
+function Initium(devname::AbstractString, scanners...;
+                 ip="192.168.129.7", stbl=1, crs="111", npp=64, lrn=1,
                  bufsize=65_000, addallports=true, usethread=true, unit=3)
 
     if !(1 ≤ stbl ≤ 5)
@@ -253,7 +256,6 @@ function Initium(devname::String, scanners...; stbl=1,
 
         # Default data acquisition parameters
         SD2(dev, stbl=stbl)
-        updateconf!(dev)
         
         if addallports
             # Add all possible pressure ports 
@@ -279,15 +281,13 @@ function Initium(devname::String, dev::Initium, stbl::Int)
         # Just return it!
         return dev.stbldev[stbl]
     end
-    conf = DAQConfig(devname=devname, ip=daqdevip(dev),
-                     model = daqdevmodel(dev), sn=daqdevserialnum(dev),
-                     tag=daqdevtag(dev))
-    conf.ipars["stbl"] = stbl
-    conf.ipars["actx"] = dev.actx
-    
+    conf = copy(dev.conf) 
+    iparam!(conf, "stbl"=>stbl, "actx"=>dev.actx)
+    chans = DaqChannels(devname, "Initium", Int[], dev.chans.units, String[])
+
     newdev = Initium(dev.ipaddr, dev.port, devname, dev.sock, dev.crs,
                      dev.scanners, stbl, dev.actx, dev.task,
-                     dev.buffer, Dict{Symbol,Int}(), DTCChannels(),
+                     dev.buffer, chans,
                      conf, dev.stbldev, false, false, dev.usethread, dev.unit)
     dev.stbldev[stbl] = newdev
     # Get a default configuration
@@ -310,31 +310,6 @@ function Base.show(io::IO, dev::Initium)
     
 end
 
-"""
-`updateconf!(dev)`
-
-The configuration of a `DTCInitium` device is stored in the `params` field of 
-an `Initium` object and other fields (such as `actx` or `stbl`). 
-This function updates the `conf::DAQConfig` field so that 
-the actual configuration can be stored in HDF5 files. 
-"""    
-function updateconf!(dev)
-    stbl = dev.stbl
-
-    p1 = dev.params
-    p = dev.conf
-    ipars = p.ipars
-    ipars["stbl"] = stbl
-    ipars["nfr"] = p1[:nfr]
-    ipars["nms"] = p1[:nms]
-    ipars["msd"] = p1[:msd]
-    ipars["trm"] = p1[:trm]
-    ipars["scm"] = p1[:scm]
-    ipars["ocf"] = p1[:ocf]
-    ipars["actx"] = dev.actx
-    return
-    
-end
 
 """
 `setfastdaq!(dev, actx=1)`
@@ -393,14 +368,14 @@ function addpressports(dev, plst::AbstractVector{PortRange}; names="P")
 
     # Add the new channels to dev.chans
     nch = length(chans)
-    dev.chans.nchans = length(chans)
-    dev.chans.plst =  plst
-    dev.chans.channels = chans
-    dev.chans.channames = chs
-    for i in 1:nch
-        chname = chs[i]
-        dev.chans.chanidx[chname] = i
+    dev.chans.channels = chs
+    dev.chans.physchans = chans
+    chanmap = OrderedDict{String,Int}()
+    for (i,ch) in enumerate(chs)
+        chanmap[ch] = i
     end
+    dev.chanmap = chanmap
+    dev.units = unit_table[dev.unit]
     
     dev.haschans = true
     
@@ -518,12 +493,17 @@ function addscanners(dev::Initium, lst...; npp=64, lrn=1, unit=3)
         end
         
         # Set the default unit to Pascal (3)
-        
-        for lrn in unique([s[3] for s in scnlst])  
-            PC4(dev, unit, 0, lrn=lrn)
+        daqunits(dev, unit, lrn=lrn)
+
+        # Store the scanner list in the configuration
+        nscn = length(scnlist)
+        scnmat = zeros(Int32,3,nscn)
+        for (i,s) in enumerate(scnlst)
+            scnmat[1,i] = s[1]
+            scnmat[2,i] = s[2]
+            scnamt[3,i] = s[3]
         end
-        dev.unit=unit
-        
+
     catch e
         if isa(e, DTCInitiumError)
             close(dev.sock)
