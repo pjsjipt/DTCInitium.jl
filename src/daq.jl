@@ -307,7 +307,6 @@ function readscanner!(dev)
             rtype = resptype(b)
             # Is packet error or confirmation - daq has ended
             if rtype==4 || rtype == 128
-                println("rtype = $rtype\n rcode = $(respcode(b))")
                 # We don't need to store this packet!
                 pop!(buf)
                 stopped = false
