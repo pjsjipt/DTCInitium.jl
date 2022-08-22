@@ -6,7 +6,7 @@ import DataStructures: OrderedDict
 
 export Initium, SD1, SD2, SD3, SD5, PC4, CA2, AD0, AD2, socket
 export readresponse, readresponse!
-export scannerlist, SD1cmd, daqparams, setparams, SD2cmd
+export scannerlist, SD1cmd, SD2cmd
 export addscanners
 export daqaddinput, daqconfig, daqacquire, daqconfig, daqconfigdev
 export daqstart, daqread, daqstop, daqzero, daqunits
@@ -219,7 +219,7 @@ function Initium(devname::AbstractString, ip::AbstractString;
         scanners = Tuple{Int,Int,Int}[]
         buffer = CircMatBuffer{UInt8}()
         
-        chans = DaqChannels(devname, "Initium", Int[], "Pa", String[])
+        chans = DaqChannels(devname, "Initium", String[], "Pa", Int[])
         stbldev = Dict{Int,Initium}()
         
         dev = Initium(ip1, port, devname, sock, crs, scanners, stbl, 1, tsk,
@@ -330,7 +330,7 @@ function setfastdaq!(dev::Initium, actx=1)
     # This is a global parameter! Should update ALL subdevices!
     for (stbl, xdev) in dev.stbldev
         xdev.actx = actx
-        xdev.conf.ipars["actx"] = actx
+        iparam!(xdev, "actx"=>actx)
     end
     return
 end
@@ -367,16 +367,10 @@ function addpressports(dev, plst::AbstractVector{PortRange}; names="P")
     end
 
     # Add the new channels to dev.chans
-    nch = length(chans)
-    dev.chans.channels = chs
-    dev.chans.physchans = chans
-    chanmap = OrderedDict{String,Int}()
-    for (i,ch) in enumerate(chs)
-        chanmap[ch] = i
-    end
-    dev.chanmap = chanmap
-    dev.units = unit_table[dev.unit]
+    channels = DaqChannels(devname(dev), devtype(dev), chs,
+                           UNIT_TABLE[dev.unit], chans)
     
+    dev.chans = channels
     dev.haschans = true
     
 end
@@ -478,10 +472,10 @@ DTC Initium
 """
 function addscanners(dev::Initium, lst...; npp=64, lrn=1, unit=3)
     
-    scnlst = scannerlist(lst...; npp=npp, lrn=lrn)
 
     !isopen(socket(dev)) && open(dev)
     try
+        scnlst = scannerlist(lst...; npp=npp, lrn=lrn)
         SD1(dev, scnlst)
         dev.scanners = scnlst
         # Set buffer width size
@@ -493,17 +487,17 @@ function addscanners(dev::Initium, lst...; npp=64, lrn=1, unit=3)
         end
         
         # Set the default unit to Pascal (3)
-        daqunits(dev, unit, lrn=lrn)
+        daqunits(dev, unit) 
 
         # Store the scanner list in the configuration
-        nscn = length(scnlist)
+        nscn = length(scnlst)
         scnmat = zeros(Int32,3,nscn)
         for (i,s) in enumerate(scnlst)
             scnmat[1,i] = s[1]
             scnmat[2,i] = s[2]
-            scnamt[3,i] = s[3]
+            scnmat[3,i] = s[3]
         end
-
+        oparam!(dev.conf, "scanlist"=>scnmat)
     catch e
         if isa(e, DTCInitiumError)
             close(dev.sock)

@@ -117,8 +117,10 @@ function SD2(dev::Initium; stbl=1, nfr=64, nms=1, msd=100, trm=0, scm=1, ocf=2)
     resp = read(io, 8)
     ispackerr(resp) && throw(DTCInitiumError(resperr(resp)))
 
-    dev.params = params
-
+    for (k,v) in params
+        iparam!(dev.conf, k=>Int64(v))
+    end
+    
     dev.isconfigured = true
     
     return respconf(resp)

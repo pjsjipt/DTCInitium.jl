@@ -80,14 +80,13 @@ function DAQCore.daqconfigdev(dev::Initium; kw...)
         setfastdaq!(dev, actx)
     end
     
-    p = dev.params
     if :nfr ∈ k
         nfr = kw[:nfr]
         if nfr < 1 || nfr > 127
             throw(DomainError(nfr, "nfr range is 1-127!"))
         end
-    elseif haskey(p, :nfr)
-        nfr = p[:nfr]
+    elseif ihaskey(dev, "nfr")
+        nfr = iparam(dev, "nfr")
     else
         nfr = 1
     end
@@ -97,8 +96,8 @@ function DAQCore.daqconfigdev(dev::Initium; kw...)
         if !(0 ≤ nms ≤ 65_000)
             throw(DomainError(nms, "nms range is 0-65_000!"))
         end
-    elseif haskey(p, :nms)
-        nms = p[:nms]
+    elseif ihaskey(dev, "nms")
+        nms = iparam(dev, "nms")
     else
         nms = 1
     end
@@ -108,8 +107,8 @@ function DAQCore.daqconfigdev(dev::Initium; kw...)
         if !(0 ≤ msd ≤ 600_000)
             throw(DomainError(msd, "msd range is 0-600_000!"))
         end
-    elseif haskey(p, :msd)
-        msd = p[:msd]
+    elseif haskey(dev, "msd")
+        msd = iparam(dev, "msd")
     else
         msd = 100
     end
@@ -119,8 +118,8 @@ function DAQCore.daqconfigdev(dev::Initium; kw...)
         if trm < 0 && trm > 2
             throw(DomainError(trm, "trm should be 0, 1 or 2!"))
         end
-    elseif haskey(p, :trm)
-        trm = p[:trm]
+    elseif ihaskey(dev, "trm")
+        trm = iparam(dev, "trm")
     else
         trm = 0
     end
@@ -129,7 +128,6 @@ function DAQCore.daqconfigdev(dev::Initium; kw...)
     ocf = 2
 
     SD2(dev, stbl=stbl, nfr=nfr, nms=nms, msd=msd, trm=trm, scm=scm, ocf=ocf)
-    updateconf!(dev)
 end
 
             
@@ -148,12 +146,11 @@ PLEASE USE THE FUNCTION [`daqconfigdev`](@ref) and check the manual if in doubt.
 function DAQCore.daqconfig(dev::Initium; kw...)
     stbl = dev.stbl
 
-    p = dev.params
     
     if haskey(kw, :avg)
         nfr = kw[:avg]
     else
-        nfr = p[:nfr]
+        nfr = iparam(dev, "nfr")
     end
 
     if haskey(kw, :nms) && haskey(kw, dt)
@@ -166,7 +163,7 @@ function DAQCore.daqconfig(dev::Initium; kw...)
             dt = kw[:dt]
             msd = round(Int, 1000*dt)
         else
-            msd = p[:msd]
+            msd = iparam(dev, "msd")
         end
     end
 
@@ -187,7 +184,7 @@ function DAQCore.daqconfig(dev::Initium; kw...)
             nms = round(Int, time * 1000 / dt)
         end
     else
-        nms = p[:nms]
+        nms = iparam(dev, "nms")
     end
 
     if haskey(kw, :trigger)
@@ -217,6 +214,8 @@ function readresponse!(io, buf)
     end
     return resptype(buf)
 end
+
+
 """
 `readscanner!(dev)`
 
@@ -237,16 +236,15 @@ function readscanner!(dev)
     io = socket(dev)
     isopen(io) || throw(ArgumentError("Socket not open!"))
     
-    par = dev.params
 
     # Only EU units without temp-sets
-    if par[:ocf] != 2
+    if iparam(dev, "ocf") != 2
         error("Paramater ocf should be 2!")
     end
      
     tsk = dev.task
     buf = dev.buffer
-    nsamples = par[:nms]
+    nsamples = iparam(dev, "nms")
     
     
     if nsamples > capacity(buf)
@@ -258,7 +256,7 @@ function readscanner!(dev)
 
     tsk.isreading = true
     tsk.time = now()
-    cmd = AD2cmd(stbl)
+    cmd = AD2cmd(stbl, nsamples)
     println(io, cmd)
     
     t0 = time_ns()
@@ -308,7 +306,8 @@ function readscanner!(dev)
             tn = time_ns()
             rtype = resptype(b)
             # Is packet error or confirmation - daq has ended
-            if rtype==4 || rtype == 128 
+            if rtype==4 || rtype == 128
+                println("rtype = $rtype\n rcode = $(respcode(b))")
                 # We don't need to store this packet!
                 pop!(buf)
                 stopped = false
@@ -406,9 +405,8 @@ function DAQCore.daqacquire(dev::Initium)
     fs = samplingrate(dev.task)
     P = readpressure(dev)
     t = dev.task.time
-    
-    return MeasData{Matrix{Float32},Int}(devname(dev), devtype(dev),
-                                         t, fs, P, dev.unit, dev.chans.chanidx)
+    S = DaqSamplingRate(fs, size(P,2), t)
+    return MeasData(devname(dev), devtype(dev), S, P, dev.chans)
 end
 
 """
@@ -451,7 +449,7 @@ function DAQCore.daqread(dev::Initium)
     stbl = dev.stbl
 
     # If we are doing continuous data acquisition, we first need to stop it
-    if dev.params[:nms] == 0
+    if iparam(dev, "nms") == 0
         # Stop reading!
         daqstop(dev)
     end
@@ -465,9 +463,8 @@ function DAQCore.daqread(dev::Initium)
     fs = samplingrate(dev.task)
     P = readpressure(dev)
     t = dev.task.time
-
-    return MeasData{Matrix{Float32},Int}(devname(dev), devtype(dev),
-                                         t, fs, P, dev.unit, dev.chans.chanidx)
+    S = DaqSamplingRate(fs, size(P,2), t)
+    return MeasData(devname(dev), devtype(dev), S, P, dev.chans)
 end
 
 
@@ -489,10 +486,10 @@ function DAQCore.daqstop(dev::Initium)
 end
 
 "Returns the number of channels available"
-DAQCore.numchannels(dev::Initium) = dev.chans.nchans
+DAQCore.numchannels(dev::Initium) = numchannels(dev.chans)
     
 "Returns the names of the channels available"
-DAQCore.daqchannels(dev::Initium) = dev.chans.channames
+DAQCore.daqchannels(dev::Initium) = daqchannels(dev.chans)
 
 "Perform a zero calibration"
 function DAQCore.daqzero(dev::Initium; lrn=1, time=15)
@@ -542,13 +539,11 @@ range number. But this driver specifies that a single unit is used!
 | 12  | PSF  | 144.0     |
 | 13  | user |   ?       |
 """
-function DAQCore.daqunits(dev::Initium, unit=3 lrn=1)
+function DAQCore.daqunits(dev::Initium, unit=3)
     
     (1 ≤ unit ≤ 12) || throw(DomainError(unit, "Unit should be between 1 and 12"))
-    
-    for lrn in unique([s[3] for s in dev.scanners])  
-        PC4(dev, unit, 0, lrn=lrn)
-    end
+
+    PC4(dev, unit, 0, lrn=1)
 
     iparam!(dev.conf, "unit"=>unit)
     dev.unit = unit

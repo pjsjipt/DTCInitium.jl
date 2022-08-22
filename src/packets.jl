@@ -56,6 +56,24 @@ ispackarray(resp) = resptype(resp) == 33
 ispacktypevalid(resp) = resptype(resp) ∈ (4, 8, 9, 16, 17, 19, 33, 128)
 
 
+function readpackarray(resp)
+
+    ispackarray(resp) || error("Not a Binary Array Data Responso (type = 33)!")
+    nrows, ncols = respdata(resp)
+
+    # The data array is row major so we will return the transpose:
+    
+    data = zeros(Float32, ncols, nrows)
+    cnt = 8
+    for i in 1:nrows
+        for k in 1:ncols
+            data[k,i] = ntoh(reinterpret(Float32, resp[cnt .+ (1:4)])[1])
+            cnt += 4
+        end
+    end
+    return data
+
+end
 
 
 "Read 8 byte header from socket"
