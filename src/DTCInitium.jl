@@ -76,7 +76,7 @@ mutable struct Initium <: AbstractPressureScanner
     "Channels configured"
     chans::DaqChannels{Vector{Int},String} 
     "Device configuration"
-    conf::DaqConfig
+    config::DaqConfig
     "Devices with `stbl` configured"
     stbldev::Dict{Int, Initium}
     "Have channels been added to device?"
@@ -281,7 +281,7 @@ function Initium(devname::String, dev::Initium, stbl::Int)
         # Just return it!
         return dev.stbldev[stbl]
     end
-    conf = copy(dev.conf) 
+    conf = copy(dev.config) 
     iparam!(conf, "stbl"=>stbl, "actx"=>dev.actx)
     chans = DaqChannels(devname, "Initium", Int[], dev.chans.units, String[])
 
@@ -497,7 +497,7 @@ function addscanners(dev::Initium, lst...; npp=64, lrn=1, unit=3)
             scnmat[2,i] = s[2]
             scnmat[3,i] = s[3]
         end
-        oparam!(dev.conf, "scanlist"=>scnmat)
+        oparam!(dev.config, "scanlist"=>scnmat)
     catch e
         if isa(e, DTCInitiumError)
             close(dev.sock)

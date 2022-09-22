@@ -544,7 +544,7 @@ function DAQCore.daqunits(dev::Initium, unit=3)
 
     PC4(dev, unit, 0, lrn=1)
 
-    iparam!(dev.conf, "unit"=>unit)
+    iparam!(dev.config, "unit"=>unit)
     dev.unit = unit
     return
 end

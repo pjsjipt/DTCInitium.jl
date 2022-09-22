@@ -118,7 +118,7 @@ function SD2(dev::Initium; stbl=1, nfr=64, nms=1, msd=100, trm=0, scm=1, ocf=2)
     ispackerr(resp) && throw(DTCInitiumError(resperr(resp)))
 
     for (k,v) in params
-        iparam!(dev.conf, k=>Int64(v))
+        iparam!(dev.config, k=>Int64(v))
     end
     
     dev.isconfigured = true
