@@ -213,7 +213,7 @@ function Initium(devname::AbstractString, ip::AbstractString;
     try
         tsk = DaqTask()
 
-        conf = DaqConfig(devname, "Initium"; ip=ip, port=port,
+        conf = DaqConfig(ip=ip, port=port,
                          model="DTCInitium", sn="", tag="")
         iparam!(conf, "stbl"=>stbl, "actx"=>1)
         scanners = Tuple{Int,Int,Int}[]
