@@ -118,8 +118,12 @@ end
 
 dtcresparray(h::DTCRespHeader, b::AbstractVector{UInt}) = readpackarray(b)
 
+
+@enum DtcResponses::UInt8 DTC_CONF=4 DCT_IVAL=8 FDTC_FVAL=9 DTC_ISTREAM=16 DTC_ISTREAM3=17  DTC_FSTREAM=19 DTC_ARRAY=33 DTC_ERROR=128
+
+
+
 struct DTCRespStream{T}
-    header::DTCRespHeader
     idx::Int
     len::Int
     iutyp::Int
@@ -145,7 +149,7 @@ function DTCRespStream(::Type{Int16}, h::DTCRespHeader, b::AbstractVector{UInt8}
         values[i] = Int32(b[cnt]*Int16(256) + b[cnt+1])
         cnt += 2
     end
-    return DTCRespStream{Int32}(h, idx, nvals, iutyp, stbl, nfr, cnvt, seq, values)
+    return DTCRespStream{Int32}(idx, nvals, iutyp, stbl, nfr, cnvt, seq, values)
 end
 
 function DTCRespStream(::Type{Float32}, h::DTCRespHeader, b::AbstractVector{UInt8})
@@ -161,10 +165,10 @@ function DTCRespStream(::Type{Float32}, h::DTCRespHeader, b::AbstractVector{UInt
     cnt = 24
     values = zeros(Float32,nvals)
     for i in 1:nvals
-        values[i] = ntoh(reinterpret(Float32, resp[cnt .+ 1:4])[1])
+        values[i] = reinterpret(Float32, b[cnt .+ 4:-1:1])[1]
         cnt += 4
     end
-    return DTCRespStream{Float32}(h, idx, nvals, iutyp, stbl, nfr, cnvt, seq, values)
+    return DTCRespStream{Float32}(idx, nvals, iutyp, stbl, nfr, cnvt, seq, values)
 end
 
 primitive type Int24 <: Signed 24 end
@@ -185,11 +189,11 @@ function DTCRespStream(::Type{Int24}, h::DTCRespHeader, b::AbstractVector{UInt8}
         values[i] = Int32((b[cnt]*256 + b[cnt+1])*256 + b[cnt+2])
         cnt += 3
     end
-    return DTCRespStream{Int32}(h, idx, nvals, iutyp, stbl, nfr, cnvt, seq, values)
+    return DTCRespStream{Int32}(idx, nvals, iutyp, stbl, nfr, cnvt, seq, values)
 end
                               
 
-function xcommand(io, cmd)
+function xcommand(io::TCPSocket, cmd)
     println(io, cmd)
     sleep(0.2)
 
@@ -200,37 +204,35 @@ function xcommand(io, cmd)
         push!(bv, b)
 
         rtype = resptype(b)
-        if rtype == 4 || rtype == 128
+        if rtype ∉ (16,17,19) 
             break
         end
     end
     return bv
-        
+    
 end
 
 function parseresponse(b::AbstractVector{UInt8})
         
-
-
     h = DTCRespHeader(b)
 
     # Parse response:
     if h.type == 4 # Confirmation byte
-        return  dtcrespconf(h, b)
+        return  h, dtcrespconf(h, b)
     elseif h.type == 128
-        return dtcresperror(h, 8)
+        return h, dtcresperror(h, 8)
     elseif h.type == 8
-        return dtcrespvalue(Int32, h, b)
+        return h, dtcrespvalue(Int32, h, b)
     elseif h.type == 9
-        return dtcrespvalue(Float32, h, b)
+        return h, dtcrespvalue(Float32, h, b)
     elseif h.type == 33
-        return dtcresparray(h, b)
+        return h, dtcresparray(h, b)
     elseif h.type == 16
-        return DTCRespStream(Int16, h, b)
+        return h, DTCRespStream(Int16, h, b)
     elseif h.type == 17
-        return DTCRespStream(Int24, h, b)
+        return h, DTCRespStream(Int24, h, b)
     elseif h.type == 19
-        return DTCRespStream(Float32, h, b)
+        return h, DTCRespStream(Float32, h, b)
     else
         # Unknownd
         error("Initium response type $(h.type). Unknown type!")

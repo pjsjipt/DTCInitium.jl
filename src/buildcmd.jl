@@ -154,16 +154,14 @@ Dict{Symbol, Int64} with 9 entries:
 ```
 
 """
-function setdaqparams(;stbl=1, nfr=64, nms=1, msd=100, trm=0, scm=1, ocf=2)
+function setdaqparams(;stbl=1, nfr=64, nms=1, msd=100, trm=0, scm=1, ocf=2,kw...)
     if !(1 ≤ stbl ≤ 5)
         throw(BoundsError(stbl, "Scan table limited to 1-5!"))
     end
-
-    if length(nfr) == 2
-        nfrez = nfr[2]
-        nfr = nfr[1]
-    else
-        nfrez = nfr
+    hasnfrez = false
+    if haskey(kw, :nfrez)
+        nfrez = kw[:nfrez]
+        hasnfrez = true
     end
     
 
@@ -171,7 +169,7 @@ function setdaqparams(;stbl=1, nfr=64, nms=1, msd=100, trm=0, scm=1, ocf=2)
         throw(BoundsError(nfr, "nfr should range from 1-127"))
     end
     
-    if !(1 ≤ nfrez ≤ 127)
+    if hasnfrez && !(1 ≤ nfrez ≤ 127)
         throw(BoundsError(nfr, "nfrez should range from 1-127"))
     end
 
@@ -194,9 +192,14 @@ function setdaqparams(;stbl=1, nfr=64, nms=1, msd=100, trm=0, scm=1, ocf=2)
     end
 
     frd = 0  # Unused
-
-    return Dict(:stbl=>stbl, :nfr=>nfr, :nfrez=>nfrez, :frd=>frd, :nms=>nms,
-                :msd=>msd, :trm=>trm, :scm=>scm, :ocf=>ocf)
+    if hasnfrez
+        return Dict(:stbl=>stbl, :nfr=>nfr, :nfrez=>nfrez, :frd=>frd, :nms=>nms,
+                    :msd=>msd, :trm=>trm, :scm=>scm, :ocf=>ocf)
+    else
+        return Dict(:stbl=>stbl, :nfr=>nfr, :frd=>frd, :nms=>nms,
+                    :msd=>msd, :trm=>trm, :scm=>scm, :ocf=>ocf)
+    end
+    
     
 end
 
@@ -226,9 +229,11 @@ julia> SD2cmd(p)
 ```
 """
 function SD2cmd(p; crs="111")
-
-    #cmd = "SD2 $crs $(p[:stbl]) ($(p[:nfr])-$(p[:nfrez]) $(p[:frd])) ($(p[:nms]) $(p[:msd])) ($(p[:trm]) $(p[:scm])) $(p[:ocf]);"
-    cmd = "SD2 $crs $(p[:stbl]) ($(p[:nfr]) $(p[:frd])) ($(p[:nms]) $(p[:msd])) ($(p[:trm]) $(p[:scm])) $(p[:ocf]);"
+    if haskey(p, :nfrez)
+        cmd = "SD2 $crs $(p[:stbl]) ($(p[:nfr])-$(p[:nfrez]) $(p[:frd])) ($(p[:nms]) $(p[:msd])) ($(p[:trm]) $(p[:scm])) $(p[:ocf]);"
+    else
+        cmd = "SD2 $crs $(p[:stbl]) ($(p[:nfr]) $(p[:frd])) ($(p[:nms]) $(p[:msd])) ($(p[:trm]) $(p[:scm])) $(p[:ocf]);"
+    end
     
 end
 

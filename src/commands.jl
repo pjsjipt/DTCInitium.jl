@@ -105,14 +105,19 @@ Parameters
      - 3 EU press-sets and ez-set and temp-sets
 
 """
-function SD2(dev::Initium; stbl=1, nfr=64, nms=1, msd=100, trm=0, scm=1, ocf=2)
+function SD2(dev::Initium; stbl=1, nfr=64, nms=1, msd=100, trm=0, scm=1, ocf=2, kw...)
 
     io = socket(dev)
     isopen(io) || throw(ArgumentError("Socket not open!"))
+    if haskey(kw, :nfrez)
+        params = setdaqparams(stbl=stbl, nfr=nfr, nms=nms, msd=msd, trm=trm,
+                              scm=scm, ocf=ocf, nfrez=kw[:nfrez])
+    else
+        params = setdaqparams(stbl=stbl, nfr=nfr, nms=nms, msd=msd, trm=trm,
+                              scm=scm, ocf=ocf)
+    end
 
-    params = setdaqparams(stbl=stbl, nfr=nfr, nms=nms, msd=msd, trm=trm, scm=scm, ocf=ocf)
     cmd = SD2cmd(params, crs=getcrs(dev))
-
     println(io, cmd)
     resp = read(io, 8)
     ispackerr(resp) && throw(DTCInitiumError(resperr(resp)))
@@ -314,17 +319,12 @@ function AD2(dev, stbl, nms=-1)
         throw(DomainError(stbl, "STBL should be between 1 and 5!"))
     end
 
-    params = daqparams(dev)
-    if !haskey(params, stbl)
-        throw(DomainError(stbl, "STBL $stbl is not yet configured!"))
-    end
     
     if nms < 0
         cmd = AD2cmd(stbl)
     else
         cmd = AD2cmd(stbl, nms)
     end
-    println(cmd)
     io = socket(dev)
     isopen(io) || throw(ArgumentError("Socket not open!"))
     println(io, cmd)
@@ -336,13 +336,13 @@ function AD2(dev, stbl, nms=-1)
         r = readresponse(io)
         rtype = resptype(r)
         t2 = time_ns()
+        push!(resp, r)
         if rtype==4 || rtype==128
             break
         end
        
-        push!(resp, r)
     end
-    return resp, Float64(t2-t1)/1e6
+    return resp, Float64(t2-t1)/1e9
 end
 
 """

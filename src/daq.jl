@@ -91,6 +91,16 @@ function DAQCore.daqconfigdev(dev::Initium; kw...)
         nfr = 1
     end
 
+    if :nfrez ∈ k
+        nfrez = kw[:nfrez]
+        if nfrez < 1 || nfrez > 127
+            throw(DomainError(nfr, "nfrez range is 1-127!"))
+        end
+        hasnfrez = true
+    else
+        hasnfrez = false
+    end
+    
     if :nms ∈ k
         nms = kw[:nms]
         if !(0 ≤ nms ≤ 65_000)
@@ -107,7 +117,7 @@ function DAQCore.daqconfigdev(dev::Initium; kw...)
         if !(0 ≤ msd ≤ 600_000)
             throw(DomainError(msd, "msd range is 0-600_000!"))
         end
-    elseif haskey(dev, "msd")
+    elseif ihaskey(dev, "msd")
         msd = iparam(dev, "msd")
     else
         msd = 100
@@ -124,10 +134,31 @@ function DAQCore.daqconfigdev(dev::Initium; kw...)
         trm = 0
     end
             
-    scm = 1
+    if :scm ∈ k
+        scm = kw[:scm]
+        if scm < 0 && scm > 1
+            throw(DomainError(trm, "scm should be 0 or 1!"))
+        end
+    elseif ihaskey(dev, "scm")
+        scm = iparam(dev, "scm")
+    else
+        scm = 1
+    end
+
     ocf = 2
 
-    SD2(dev, stbl=stbl, nfr=nfr, nms=nms, msd=msd, trm=trm, scm=scm, ocf=ocf)
+    if hasnfrez
+        SD2(dev, stbl=stbl, nfr=nfr, nms=nms, msd=msd, trm=trm, scm=scm, ocf=ocf,
+            nfrez=nfrez)
+    else
+        SD2(dev, stbl=stbl, nfr=nfr, nms=nms, msd=msd, trm=trm, scm=scm, ocf=ocf)
+    end
+
+    # Check the size of the buffer. If it is small, increase it
+    if nms > capacity(dev.buffer)
+        resize!(dev.buffer, nms)
+    end
+    return
 end
 
             
@@ -262,8 +293,11 @@ function readscanner!(dev)
     t0 = time_ns()
     t1 = t0
     b = nextbuffer(buf)
+    
+    cnt = 0
     try
         ptype = readresponse!(io, b)
+        cnt += 1
         t1 = time_ns()
         settiming!(tsk, t0, t1, 1)
         # Check to see if everything went well
@@ -276,7 +310,6 @@ function readscanner!(dev)
     catch e
         throw(e)
     end
-    
     
     tsk.nread += 1
     tn = t1
@@ -303,6 +336,7 @@ function readscanner!(dev)
             # Read packet
             b = nextbuffer(buf) 
             ptype = readresponse!(io, b)
+            cnt += 1
             tn = time_ns()
             rtype = resptype(b)
             # Is packet error or confirmation - daq has ended
@@ -329,7 +363,6 @@ function readscanner!(dev)
         end
         
     end
-
     tsk.isreading = false
     
     if stopped
