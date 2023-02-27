@@ -438,7 +438,9 @@ function DAQCore.daqacquire(dev::Initium)
     P = readpressure(dev)
     t = dev.task.time
     S = DaqSamplingRate(fs, size(P,2), t)
-    return MeasData(devname(dev), devtype(dev), S, P, dev.chans)
+    
+    return MeasData(devname(dev), devtype(dev), S, P,
+                    dev.chans, fill(UNIT_TABLE[dev.unit], size(P,1)))
 end
 
 """
@@ -496,7 +498,8 @@ function DAQCore.daqread(dev::Initium)
     P = readpressure(dev)
     t = dev.task.time
     S = DaqSamplingRate(fs, size(P,2), t)
-    return MeasData(devname(dev), devtype(dev), S, P, dev.chans)
+    return MeasData(devname(dev), devtype(dev), S, P,
+                    dev.chans, fill(UNIT_TABLE[dev.unit], size(P,1)))
 end
 
 

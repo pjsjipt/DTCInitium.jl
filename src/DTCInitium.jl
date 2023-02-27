@@ -74,7 +74,7 @@ mutable struct Initium <: AbstractPressureScanner
     "Buffer to store acquired data"
     buffer::CircMatBuffer{UInt8}
     "Channels configured"
-    chans::DaqChannels{Vector{Int},String} 
+    chans::DaqChannels{Vector{Int}} 
     "Device configuration"
     config::DaqConfig
     "Devices with `stbl` configured"
@@ -219,7 +219,7 @@ function Initium(devname::AbstractString, ip::AbstractString;
         scanners = Tuple{Int,Int,Int}[]
         buffer = CircMatBuffer{UInt8}()
         
-        chans = DaqChannels(devname, "Initium", String[], "Pa", Int[])
+        chans = DaqChannels(String[], Int[])
         stbldev = Dict{Int,Initium}()
         
         dev = Initium(ip1, port, devname, sock, crs, scanners, stbl, 1, tsk,
@@ -283,7 +283,7 @@ function Initium(devname::String, dev::Initium, stbl::Int)
     end
     conf = copy(dev.config) 
     iparam!(conf, "stbl"=>stbl, "actx"=>dev.actx)
-    chans = DaqChannels(devname, "Initium", Int[], dev.chans.units, String[])
+    chans = DaqChannels(String[], Int[])
 
     newdev = Initium(dev.ipaddr, dev.port, devname, dev.sock, dev.crs,
                      dev.scanners, stbl, dev.actx, dev.task,
@@ -367,8 +367,7 @@ function addpressports(dev, plst::AbstractVector{PortRange}; names="P")
     end
 
     # Add the new channels to dev.chans
-    channels = DaqChannels(devname(dev), devtype(dev), chs,
-                           UNIT_TABLE[dev.unit], chans)
+    channels = DaqChannels(chs, chans)
     
     dev.chans = channels
     dev.haschans = true
